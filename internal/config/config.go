@@ -2,35 +2,91 @@ package config
 
 import (
 	"os"
+	"strconv"
+	"strings"
 )
 
 type Config struct {
-	Port           string
-	DatabaseURL    string
-	JWTSecret      string
-	GoogleAudience string
-	AllowOrigins   []string
-
-	MinIOEndpoint  string
-	MinIOAccessKey string
-	MinIOSecretKey string
-	MinIOUseSSL    bool
+	Port                   string
+	DatabaseURL            string
+	JWTSecret              string
+	GoogleAudience         string
+	AllowOrigins           []string
+	MinIOEndpoint          string
+	MinIOAccessKey         string
+	MinIOSecretKey         string
+	MinIOUseSSL            bool
+	MinIOBucket            string
+	MinIOPublicURL         string
+	SessionTTL             string
+	FrontendBaseURL        string
+	SMTPHost               string
+	SMTPPort               string
+	SMTPUsername           string
+	SMTPPassword           string
+	SMTPFrom               string
+	SMTPUseTLS             bool
+	PasswordResetTTL       string
+	PasswordResetOTPLength int
 }
 
 func Load() Config {
+	otpLen := 6
+	if v, err := strconv.Atoi(getenv("PASSWORD_RESET_OTP_LENGTH", "6")); err == nil && v > 0 {
+		otpLen = v
+	}
+
 	return Config{
-		Port:           getenv("PORT", "8080"),
-		DatabaseURL:    must("DATABASE_URL"),
-		JWTSecret:      must("JWT_SECRET"),
-		GoogleAudience: must("GOOGLE_AUD"),
-
-		MinIOEndpoint:  must("MINIO_ENDPOINT"),
-		MinIOAccessKey: must("MINIO_ACCESS_KEY"),
-		MinIOSecretKey: must("MINIO_SECRET_KEY"),
-		MinIOUseSSL:    getenv("MINIO_USE_SSL", "false") == "true",
-
-		AllowOrigins:   []string{getenv("ALLOW_ORIGINS", "*")},
+		Port:                   getenv("PORT", "8080"),
+		DatabaseURL:            must("DATABASE_URL"),
+		JWTSecret:              must("JWT_SECRET"),
+		GoogleAudience:         getenv("GOOGLE_AUDIENCE", ""),
+		MinIOEndpoint:          must("MINIO_ENDPOINT"),
+		MinIOAccessKey:         must("MINIO_ACCESS_KEY"),
+		MinIOSecretKey:         must("MINIO_SECRET_KEY"),
+		MinIOUseSSL:            getenv("MINIO_USE_SSL", "false") == "true",
+		MinIOBucket:            must("MINIO_BUCKET"),
+		MinIOPublicURL:         getenv("MINIO_PUBLIC_URL", ""),
+		SessionTTL:             getenv("SESSION_TTL", "24h"),
+		FrontendBaseURL:        getenv("FRONTEND_BASE_URL", ""),
+		AllowOrigins:           splitAndTrim(getenv("ALLOW_ORIGINS", "*")),
+		SMTPHost:               getenv("SMTP_HOST", ""),
+		SMTPPort:               getenv("SMTP_PORT", ""),
+		SMTPUsername:           getenv("SMTP_USERNAME", ""),
+		SMTPPassword:           getenv("SMTP_PASSWORD", ""),
+		SMTPFrom:               getenv("SMTP_FROM", ""),
+		SMTPUseTLS:             getenv("SMTP_USE_TLS", "false") == "true",
+		PasswordResetTTL:       getenv("PASSWORD_RESET_TTL", "15m"),
+		PasswordResetOTPLength: otpLen,
 	}
 }
-func getenv(k, d string) string { if v := os.Getenv(k); v != "" { return v }; return d }
-func must(k string) string { v := os.Getenv(k); if v=="" { panic("missing env: "+k) }; return v }
+
+func splitAndTrim(input string) []string {
+	parts := strings.Split(input, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		trimmed := strings.TrimSpace(p)
+		if trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	if len(out) == 0 {
+		return []string{"*"}
+	}
+	return out
+}
+
+func getenv(k, d string) string {
+	if v := os.Getenv(k); v != "" {
+		return v
+	}
+	return d
+}
+
+func must(k string) string {
+	v := os.Getenv(k)
+	if v == "" {
+		panic("missing env: " + k)
+	}
+	return v
+}

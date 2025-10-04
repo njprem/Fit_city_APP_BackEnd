@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FitCity API Manual Tester</title>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    :root {
+      font-family: Arial, sans-serif;
+      background: #f4f6fb;
+      color: #1f2933;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      background: #1f5eff;
+      color: #fff;
+      padding: 32px;
+      text-align: center;
+    }
+    main {
+      display: grid;
+      gap: 24px;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      padding: 32px;
+    }
+    section {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 10px 30px rgba(31, 93, 255, 0.07);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    section h2 {
+      margin: 0;
+      font-size: 1.3rem;
+      color: #143d8f;
+    }
+    label {
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+    input, textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #d0d7e7;
+      border-radius: 6px;
+      font-size: 1rem;
+    }
+    textarea {
+      resize: vertical;
+      min-height: 120px;
+    }
+    button {
+      align-self: flex-start;
+      padding: 10px 18px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.95rem;
+      background: #1f5eff;
+      color: #fff;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #1746bd;
+    }
+    .muted {
+      font-size: 0.85rem;
+      color: #5c6b80;
+    }
+    .row {
+      display: flex;
+      gap: 10px;
+    }
+    .row input {
+      flex: 1;
+    }
+    pre {
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 16px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 0.85rem;
+      max-height: 240px;
+    }
+    .hidden {
+      display: none !important;
+    }
+    .profile-card {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      border: 1px solid #d0d7e7;
+      border-radius: 8px;
+      padding: 16px;
+      background: #f9fafc;
+    }
+    .profile-card img {
+      width: 96px;
+      height: 96px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: #e2e8f0;
+    }
+    .profile-details {
+      display: grid;
+      gap: 6px;
+      font-size: 0.9rem;
+    }
+    .profile-details .value {
+      font-weight: 600;
+      margin-left: 4px;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+    .profile-image-url {
+      font-size: 0.85rem;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+    .profile-image-url a {
+      color: #1f5eff;
+      text-decoration: none;
+    }
+    .profile-image-url a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>FitCity Auth Manual Tester</h1>
+    <p class="muted">Use this page to hit the backend auth endpoints without a full frontend. Adjust the base URL if your API is elsewhere.</p>
+  </header>
+
+  <main>
+    <section>
+      <h2>Configuration</h2>
+      <label for="baseUrl">API base URL</label>
+      <input id="baseUrl" type="text" value="http://localhost:8080" />
+      <label for="googleClientId">Google OAuth client ID</label>
+      <input id="googleClientId" type="text" value="128350041183-jn7nlbtjris83v4jtedt6mekrbjvij95.apps.googleusercontent.com" />
+      <label for="tokenDisplay">Active JWT</label>
+      <textarea id="tokenDisplay" readonly placeholder="Tokens will appear here after successful login/register."></textarea>
+      <div class="muted">Tokens are also stored in localStorage as <code>fitcity_token</code>.</div>
+    </section>
+
+    <section>
+      <h2>Email Registration</h2>
+      <label for="regEmail">Email</label>
+      <input id="regEmail" type="email" placeholder="user@example.com" />
+      <label for="regPassword">Password</label>
+      <input id="regPassword" type="password" placeholder="password" />
+      <button id="regSubmit">Register</button>
+      <pre id="regResult"></pre>
+    </section>
+
+    <section>
+      <h2>Email Login</h2>
+      <label for="loginEmail">Email</label>
+      <input id="loginEmail" type="email" placeholder="user@example.com" />
+      <label for="loginPassword">Password</label>
+      <input id="loginPassword" type="password" placeholder="password" />
+      <button id="loginSubmit">Login</button>
+      <pre id="loginResult"></pre>
+    </section>
+
+    <section>
+      <h2>Google Login</h2>
+      <p class="muted">Paste a Google ID token (from OAuth playground or your own client) to hit <code>/api/v1/auth/google</code>.</p>
+      <textarea id="googleIdToken" placeholder="eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."></textarea>
+      <div id="googleButtonContainer"></div>
+      <button id="googleSubmit">Login with Google token</button>
+      <pre id="googleResult"></pre>
+    </section>
+
+    <section>
+      <h2>Complete Profile</h2>
+      <label for="profileName">Full name</label>
+      <input id="profileName" type="text" placeholder="Jane Doe" />
+      <label for="profileUsername">Username</label>
+      <input id="profileUsername" type="text" placeholder="janedoe" />
+      <label for="profileAvatar">Avatar (optional image)</label>
+      <input id="profileAvatar" type="file" accept="image/*" />
+      <button id="profileSubmit">Submit profile</button>
+      <pre id="profileResult"></pre>
+    </section>
+
+    <section>
+      <h2>Change Password</h2>
+      <p class="muted">Requires an authenticated session. Leave current password blank if your account never had one.</p>
+      <label for="changeCurrentPassword">Current password</label>
+      <input id="changeCurrentPassword" type="password" placeholder="Current password" />
+      <label for="changeNewPassword">New password</label>
+      <input id="changeNewPassword" type="password" placeholder="New password" />
+      <button id="changePasswordSubmit">Update password</button>
+      <pre id="changePasswordResult"></pre>
+    </section>
+
+    <section>
+      <h2>Password Reset</h2>
+      <div>
+        <h3>Request code</h3>
+        <label for="resetEmailRequest">Account email</label>
+        <input id="resetEmailRequest" type="email" placeholder="user@example.com" />
+        <button id="resetRequestSubmit">Send reset code</button>
+        <pre id="resetRequestResult"></pre>
+      </div>
+      <div>
+        <h3>Confirm reset</h3>
+        <label for="resetEmailConfirm">Account email</label>
+        <input id="resetEmailConfirm" type="email" placeholder="user@example.com" />
+        <label for="resetOTP">Reset code (OTP)</label>
+        <input id="resetOTP" type="text" placeholder="123456" />
+        <label for="resetNewPassword">New password</label>
+        <input id="resetNewPassword" type="password" placeholder="New password" />
+        <button id="resetConfirmSubmit">Confirm password reset</button>
+        <pre id="resetConfirmResult"></pre>
+      </div>
+    </section>
+
+    <section>
+      <h2>Who Am I</h2>
+      <p class="muted">Calls <code>/api/v1/auth/me</code> using the stored token.</p>
+      <button id="meSubmit">Fetch profile</button>
+      <pre id="meResult"></pre>
+      <div id="profileCardEmpty" class="muted">Fetch profile to display user details and avatar.</div>
+      <div id="profileCard" class="profile-card hidden">
+        <img id="profileAvatarPreview" alt="Profile avatar placeholder" />
+        <div class="profile-details">
+          <div><strong>ID:</strong><span id="profileFieldId" class="value">&mdash;</span></div>
+          <div><strong>Email:</strong><span id="profileFieldEmail" class="value">&mdash;</span></div>
+          <div><strong>Username:</strong><span id="profileFieldUsername" class="value">&mdash;</span></div>
+          <div><strong>Full name:</strong><span id="profileFieldFullName" class="value">&mdash;</span></div>
+          <div><strong>Role ID:</strong><span id="profileFieldRole" class="value">&mdash;</span></div>
+          <div><strong>Profile completed:</strong><span id="profileFieldCompleted" class="value">&mdash;</span></div>
+          <div><strong>Created at:</strong><span id="profileFieldCreatedAt" class="value">&mdash;</span></div>
+          <div><strong>Updated at:</strong><span id="profileFieldUpdatedAt" class="value">&mdash;</span></div>
+          <div class="profile-image-url">
+            <strong>Avatar URL:</strong>
+            <a id="profileAvatarLink" class="hidden" target="_blank" rel="noopener noreferrer"></a>
+            <span id="profileAvatarPlaceholder" class="value">No avatar uploaded</span>
+          </div>
+        </div>
+      </div>
+      <button id="logoutSubmit">Logout</button>
+      <pre id="logoutResult"></pre>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const state = {
+      token: localStorage.getItem('fitcity_token') || '',
+    };
+    const googleState = {
+      initTimer: null,
+      lastClientId: null,
+    };
+    const PLACEHOLDER_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+    const profileUI = {
+      card: $('profileCard'),
+      empty: $('profileCardEmpty'),
+      avatar: $('profileAvatarPreview'),
+      avatarLink: $('profileAvatarLink'),
+      avatarPlaceholder: $('profileAvatarPlaceholder'),
+      fields: {
+        id: $('profileFieldId'),
+        email: $('profileFieldEmail'),
+        username: $('profileFieldUsername'),
+        fullName: $('profileFieldFullName'),
+        role: $('profileFieldRole'),
+        profileCompleted: $('profileFieldCompleted'),
+        createdAt: $('profileFieldCreatedAt'),
+        updatedAt: $('profileFieldUpdatedAt'),
+      },
+    };
+
+    function updateToken(newToken) {
+      state.token = newToken;
+      if (newToken) {
+        localStorage.setItem('fitcity_token', newToken);
+      } else {
+        localStorage.removeItem('fitcity_token');
+      }
+      $('tokenDisplay').value = newToken;
+    }
+
+    updateToken(state.token);
+
+    async function request(path, options = {}) {
+      const base = $('baseUrl').value.replace(/\/$/, '');
+      const url = base + path;
+      const headers = options.headers || {};
+      if (state.token && !headers['Authorization']) {
+        headers['Authorization'] = `Bearer ${state.token}`;
+      }
+      const response = await fetch(url, { ...options, headers });
+      let bodyText;
+      try {
+        bodyText = await response.text();
+      } catch (err) {
+        bodyText = err.message;
+      }
+      let parsed;
+      try {
+        parsed = JSON.parse(bodyText);
+      } catch {
+        parsed = bodyText;
+      }
+      return { status: response.status, body: parsed };
+    }
+
+    function pretty(result) {
+      return JSON.stringify(result, null, 2);
+    }
+
+    function formatDate(value) {
+      if (!value) {
+        return '—';
+      }
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        return typeof value === 'string' ? value : '—';
+      }
+      return date.toLocaleString();
+    }
+
+    function getUserPayload(body) {
+      if (!body || typeof body !== 'object') {
+        return null;
+      }
+      const user = body.user;
+      if (!user || typeof user !== 'object') {
+        return null;
+      }
+      return user;
+    }
+
+    function renderProfile(user) {
+      if (!profileUI.card || !profileUI.avatar) {
+        return;
+      }
+
+      if (!user) {
+        profileUI.card.classList.add('hidden');
+        if (profileUI.empty) {
+          profileUI.empty.classList.remove('hidden');
+        }
+        profileUI.avatar.src = PLACEHOLDER_IMAGE;
+        profileUI.avatar.alt = 'Profile avatar placeholder';
+        Object.values(profileUI.fields).forEach((el) => {
+          if (el) {
+            el.textContent = '—';
+          }
+        });
+        if (profileUI.avatarLink) {
+          profileUI.avatarLink.classList.add('hidden');
+          profileUI.avatarLink.removeAttribute('href');
+          profileUI.avatarLink.textContent = '';
+        }
+        if (profileUI.avatarPlaceholder) {
+          profileUI.avatarPlaceholder.textContent = 'No avatar uploaded';
+          profileUI.avatarPlaceholder.classList.remove('hidden');
+        }
+        return;
+      }
+
+      profileUI.card.classList.remove('hidden');
+      if (profileUI.empty) {
+        profileUI.empty.classList.add('hidden');
+      }
+
+      const setField = (key, value) => {
+        const el = profileUI.fields[key];
+        if (!el) {
+          return;
+        }
+        el.textContent = value ?? '—';
+      };
+
+      setField('id', user.id || '—');
+      setField('email', user.email || '—');
+      setField('username', user.username || '—');
+      setField('fullName', user.full_name || '—');
+      setField('role', user.role_id || '—');
+      if (typeof user.profile_completed === 'boolean') {
+        setField('profileCompleted', user.profile_completed ? 'Yes' : 'No');
+      } else {
+        setField('profileCompleted', '—');
+      }
+      setField('createdAt', formatDate(user.created_at));
+      setField('updatedAt', formatDate(user.updated_at));
+
+      const avatarUrl = user.user_image_url;
+      if (avatarUrl) {
+        profileUI.avatar.src = avatarUrl;
+        profileUI.avatar.alt = 'Profile avatar';
+        if (profileUI.avatarLink) {
+          profileUI.avatarLink.textContent = avatarUrl;
+          profileUI.avatarLink.href = avatarUrl;
+          profileUI.avatarLink.classList.remove('hidden');
+        }
+        if (profileUI.avatarPlaceholder) {
+          profileUI.avatarPlaceholder.classList.add('hidden');
+        }
+      } else {
+        profileUI.avatar.src = PLACEHOLDER_IMAGE;
+        profileUI.avatar.alt = 'Profile avatar placeholder';
+        if (profileUI.avatarLink) {
+          profileUI.avatarLink.classList.add('hidden');
+          profileUI.avatarLink.removeAttribute('href');
+          profileUI.avatarLink.textContent = '';
+        }
+        if (profileUI.avatarPlaceholder) {
+          profileUI.avatarPlaceholder.textContent = 'No avatar uploaded';
+          profileUI.avatarPlaceholder.classList.remove('hidden');
+        }
+      }
+    }
+
+    function updateProfileFromResult(result) {
+      if (!result) {
+        return;
+      }
+      if (result.status === 401) {
+        renderProfile(null);
+        return;
+      }
+      if (result.status >= 400) {
+        return;
+      }
+      const user = getUserPayload(result.body);
+      if (user) {
+        renderProfile(user);
+      }
+    }
+
+    renderProfile(null);
+    if (profileUI.avatar) {
+      profileUI.avatar.addEventListener('error', () => {
+        if (profileUI.avatar.src !== PLACEHOLDER_IMAGE) {
+          profileUI.avatar.src = PLACEHOLDER_IMAGE;
+        }
+      });
+    }
+
+    async function loginWithGoogleToken(idToken) {
+      const trimmed = idToken.trim();
+      if (!trimmed) {
+        $('googleResult').textContent = pretty({ status: 0, body: 'Google ID token required' });
+        return null;
+      }
+      const result = await request('/api/v1/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id_token: trimmed }),
+      });
+      $('googleResult').textContent = pretty(result);
+      if (result.status < 400 && result.body.token) {
+        updateToken(result.body.token);
+      }
+      updateProfileFromResult(result);
+      return result;
+    }
+
+    function handleGoogleCredentialResponse(response) {
+      const credential = (response && response.credential) || '';
+      if (!credential) {
+        $('googleResult').textContent = pretty({ status: 0, body: 'Google credential missing from response' });
+        return;
+      }
+      $('googleIdToken').value = credential;
+      $('googleResult').textContent = pretty({ status: 0, body: 'Received Google credential, exchanging with API...' });
+      loginWithGoogleToken(credential);
+    }
+
+    function renderGoogleButton() {
+      if (!window.google || !google.accounts || !google.accounts.id) {
+        return false;
+      }
+      const clientId = $('googleClientId').value.trim();
+      if (!clientId) {
+        $('googleButtonContainer').innerHTML = '<span class="muted">Add a Google client ID to enable the sign-in button.</span>';
+        googleState.lastClientId = null;
+        return true;
+      }
+      if (googleState.lastClientId === clientId && $('googleButtonContainer').children.length) {
+        return true;
+      }
+      $('googleButtonContainer').innerHTML = '';
+      google.accounts.id.initialize({
+        client_id: clientId,
+        callback: handleGoogleCredentialResponse,
+      });
+      google.accounts.id.renderButton(
+        $('googleButtonContainer'),
+        { type: 'standard', theme: 'outline', size: 'large' },
+      );
+      googleState.lastClientId = clientId;
+      return true;
+    }
+
+    function scheduleGoogleButtonRender() {
+      if (renderGoogleButton()) {
+        if (googleState.initTimer) {
+          clearInterval(googleState.initTimer);
+          googleState.initTimer = null;
+        }
+        return;
+      }
+
+      if (!googleState.initTimer) {
+        googleState.initTimer = setInterval(() => {
+          if (renderGoogleButton() && googleState.initTimer) {
+            clearInterval(googleState.initTimer);
+            googleState.initTimer = null;
+          }
+        }, 500);
+      }
+    }
+
+    $('regSubmit').addEventListener('click', async () => {
+      const payload = {
+        email: $('regEmail').value,
+        password: $('regPassword').value,
+      };
+      const result = await request('/api/v1/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      $('regResult').textContent = pretty(result);
+      if (result.status < 400 && result.body.token) {
+        updateToken(result.body.token);
+      }
+      updateProfileFromResult(result);
+    });
+
+    $('loginSubmit').addEventListener('click', async () => {
+      const payload = {
+        email: $('loginEmail').value,
+        password: $('loginPassword').value,
+      };
+      const result = await request('/api/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      $('loginResult').textContent = pretty(result);
+      if (result.status < 400 && result.body.token) {
+        updateToken(result.body.token);
+      }
+      updateProfileFromResult(result);
+    });
+
+    $('googleSubmit').addEventListener('click', async () => {
+      await loginWithGoogleToken($('googleIdToken').value);
+    });
+
+    $('googleClientId').addEventListener('input', () => {
+      googleState.lastClientId = null;
+      scheduleGoogleButtonRender();
+    });
+
+    window.addEventListener('load', scheduleGoogleButtonRender);
+    scheduleGoogleButtonRender();
+
+    $('profileSubmit').addEventListener('click', async () => {
+      const form = new FormData();
+      form.append('full_name', $('profileName').value);
+      form.append('username', $('profileUsername').value);
+      const fileInput = $('profileAvatar');
+      if (fileInput.files.length > 0) {
+        form.append('avatar', fileInput.files[0]);
+      }
+      const result = await request('/api/v1/auth/profile', {
+        method: 'POST',
+        body: form,
+      });
+      $('profileResult').textContent = pretty(result);
+      updateProfileFromResult(result);
+    });
+
+    $('changePasswordSubmit').addEventListener('click', async () => {
+      const payload = {
+        current_password: $('changeCurrentPassword').value,
+        new_password: $('changeNewPassword').value,
+      };
+      const result = await request('/api/v1/auth/password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      $('changePasswordResult').textContent = pretty(result);
+      if (result.status < 400) {
+        $('changeCurrentPassword').value = '';
+        $('changeNewPassword').value = '';
+      }
+    });
+
+    $('resetRequestSubmit').addEventListener('click', async () => {
+      const payload = { email: $('resetEmailRequest').value };
+      const result = await request('/api/v1/auth/password/reset-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      $('resetRequestResult').textContent = pretty(result);
+    });
+
+    $('resetConfirmSubmit').addEventListener('click', async () => {
+      const payload = {
+        email: $('resetEmailConfirm').value,
+        otp: $('resetOTP').value,
+        new_password: $('resetNewPassword').value,
+      };
+      const result = await request('/api/v1/auth/password/reset-confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      $('resetConfirmResult').textContent = pretty(result);
+      if (result.status < 400) {
+        $('resetOTP').value = '';
+        $('resetNewPassword').value = '';
+      }
+    });
+
+    $('meSubmit').addEventListener('click', async () => {
+      const result = await request('/api/v1/auth/me');
+      $('meResult').textContent = pretty(result);
+      updateProfileFromResult(result);
+    });
+
+    $('logoutSubmit').addEventListener('click', async () => {
+      const result = await request('/api/v1/auth/logout', {
+        method: 'POST',
+      });
+      $('logoutResult').textContent = pretty(result);
+      if (result.status < 400) {
+        updateToken('');
+        renderProfile(null);
+      } else if (result.status === 401) {
+        updateToken('');
+        renderProfile(null);
+      }
+    });
+  </script>
+</body>
+</html>

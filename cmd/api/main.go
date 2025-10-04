@@ -2,46 +2,60 @@ package main
 
 import (
 	"log"
-	"os"
+	"time"
 
-	"FitCity-API/internal/config"
-	"FitCity-API/internal/repository/postgres"
-	"FitCity-API/internal/repository/minio"
-	"FitCity-API/internal/service"
-	httpx "FitCity-API/internal/transport/http"
+	"github.com/njprem/Fit_city_APP_BackEnd/internal/config"
+	minioRepo "github.com/njprem/Fit_city_APP_BackEnd/internal/repository/minio"
+	"github.com/njprem/Fit_city_APP_BackEnd/internal/repository/postgres"
+	"github.com/njprem/Fit_city_APP_BackEnd/internal/service"
+	httpx "github.com/njprem/Fit_city_APP_BackEnd/internal/transport/http"
+	"github.com/njprem/Fit_city_APP_BackEnd/internal/transport/mail"
+	"github.com/njprem/Fit_city_APP_BackEnd/internal/util"
 )
 
 func main() {
-	cfg := config.Load() // read env
+	cfg := config.Load()
 
-	// DB
 	db, err := postgres.New(cfg.DatabaseURL)
-	if err != nil { log.Fatal(err) }
+	if err != nil {
+		log.Fatalf("connect database: %v", err)
+	}
 
-	// Repos
+	minioClient, err := minioRepo.NewClient(cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, cfg.MinIOUseSSL)
+	if err != nil {
+		log.Fatalf("minio client: %v", err)
+	}
+	objectStorage := minioRepo.NewStorage(minioClient, cfg.MinIOPublicURL)
+
+	sessionTTL, err := time.ParseDuration(cfg.SessionTTL)
+	if err != nil {
+		log.Printf("invalid SESSION_TTL, fallback to 24h: %v", err)
+		sessionTTL = 24 * time.Hour
+	}
+
+	jwtManager := util.NewJWTManager(cfg.JWTSecret, sessionTTL)
+
 	userRepo := postgres.NewUserRepo(db)
-	destRepo := postgres.NewDestinationRepo(db)
-	reviewRepo := postgres.NewReviewRepo(db)
-	favRepo := postgres.NewFavoriteRepo(db)
+	roleRepo := postgres.NewRoleRepo(db)
+	sessionRepo := postgres.NewSessionRepo(db)
+	passwordResetRepo := postgres.NewPasswordResetRepo(db)
 
-	// Object storage
-	minioCli, err := minio.NewClient(cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, cfg.MinIOUseSSL)
-	if err != nil { log.Fatal(err) }
-	objStore := minio.NewStorage(minioCli)
+	resetTTL, err := time.ParseDuration(cfg.PasswordResetTTL)
+	if err != nil {
+		log.Printf("invalid PASSWORD_RESET_TTL, fallback to 15m: %v", err)
+		resetTTL = 15 * time.Minute
+	}
 
-	// Services
-	authSvc := service.NewAuthService(userRepo, cfg.JWTSecret, cfg.GoogleAudience)
-	destSvc := service.NewDestinationService(destRepo, objStore)
-	reviewSvc := service.NewReviewService(reviewRepo, destRepo)
-	favSvc := service.NewFavoriteService(favRepo, destRepo)
+	var resetMailer service.PasswordResetSender
+	if cfg.SMTPHost != "" && cfg.SMTPPort != "" && cfg.SMTPFrom != "" {
+		resetMailer = mail.NewPasswordResetMailer(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPFrom, cfg.SMTPUseTLS)
+	}
 
-	// HTTP
-	e := httpx.NewRouter(cfg.AllowOrigins)
-	httpx.RegisterAuth(e, authSvc)
-	httpx.RegisterDestinations(e, destSvc)
-	httpx.RegisterReviews(e, reviewSvc)
-	httpx.RegisterFavorites(e, favSvc)
+	authService := service.NewAuthService(userRepo, roleRepo, sessionRepo, passwordResetRepo, objectStorage, resetMailer, jwtManager, cfg.GoogleAudience, cfg.MinIOBucket, resetTTL, cfg.PasswordResetOTPLength)
 
-	e.Logger.Fatal(e.Start(":" + cfg.Port))
-	_ = os.Setenv("READY", "1")
+	router := httpx.NewRouter(cfg.AllowOrigins)
+	httpx.RegisterPages(router, cfg.FrontendBaseURL)
+	httpx.RegisterAuth(router, authService)
+
+	router.Logger.Fatal(router.Start(":" + cfg.Port))
 }
