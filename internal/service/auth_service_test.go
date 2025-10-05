@@ -58,6 +58,16 @@ type fakeUserRepo struct {
 		salt []byte
 	}
 	updatePasswordErr error
+
+	listInputs []struct {
+		limit  int
+		offset int
+	}
+	listResult []domain.User
+	listErr    error
+
+	deleteInput uuid.UUID
+	deleteErr   error
 }
 
 func (f *fakeUserRepo) CreateEmailUser(ctx context.Context, email string, passwordHash, passwordSalt []byte, roleID uuid.UUID) (*domain.User, error) {
@@ -108,6 +118,22 @@ func (f *fakeUserRepo) UpdatePassword(ctx context.Context, id uuid.UUID, passwor
 		salt: append([]byte(nil), passwordSalt...),
 	}
 	return f.updatePasswordErr
+}
+
+func (f *fakeUserRepo) List(ctx context.Context, limit, offset int) ([]domain.User, error) {
+	f.listInputs = append(f.listInputs, struct {
+		limit  int
+		offset int
+	}{limit: limit, offset: offset})
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	return append([]domain.User(nil), f.listResult...), nil
+}
+
+func (f *fakeUserRepo) Delete(ctx context.Context, id uuid.UUID) error {
+	f.deleteInput = id
+	return f.deleteErr
 }
 
 type fakeRoleRepo struct {
@@ -780,6 +806,134 @@ func TestLogoutDeactivatesSession(t *testing.T) {
 	if sessionRepo.deactivatedToken != "token123" {
 		t.Fatalf("expected session to be deactivated with token123")
 	}
+}
+
+func TestListUsers(t *testing.T) {
+	ctx := context.Background()
+	userA := domain.User{ID: uuid.New(), Email: "a@example.com"}
+	userB := domain.User{ID: uuid.New(), Email: "b@example.com"}
+	repo := &fakeUserRepo{listResult: []domain.User{userA, userB}}
+	svc := newAuthServiceForTests(repo, &fakeRoleRepo{}, &fakeSessionRepo{}, &fakeStorage{}, nil, nil)
+
+	users, err := svc.ListUsers(ctx, 25, 10)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(repo.listInputs) != 1 {
+		t.Fatalf("expected one call to list, got %d", len(repo.listInputs))
+	}
+	if repo.listInputs[0].limit != 25 || repo.listInputs[0].offset != 10 {
+		t.Fatalf("expected limit=25 offset=10, got limit=%d offset=%d", repo.listInputs[0].limit, repo.listInputs[0].offset)
+	}
+	if len(users) != 2 || users[0].ID != userA.ID || users[1].ID != userB.ID {
+		t.Fatalf("unexpected users returned: %+v", users)
+	}
+
+	t.Run("applies defaults and clamps", func(t *testing.T) {
+		repo := &fakeUserRepo{listResult: []domain.User{}}
+		svc := newAuthServiceForTests(repo, &fakeRoleRepo{}, &fakeSessionRepo{}, &fakeStorage{}, nil, nil)
+
+		if _, err := svc.ListUsers(ctx, 0, -5); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(repo.listInputs) != 1 {
+			t.Fatalf("expected one call to list, got %d", len(repo.listInputs))
+		}
+		if repo.listInputs[0].limit != 50 || repo.listInputs[0].offset != 0 {
+			t.Fatalf("expected defaults limit=50 offset=0, got limit=%d offset=%d", repo.listInputs[0].limit, repo.listInputs[0].offset)
+		}
+
+		repo = &fakeUserRepo{listResult: []domain.User{}}
+		svc = newAuthServiceForTests(repo, &fakeRoleRepo{}, &fakeSessionRepo{}, &fakeStorage{}, nil, nil)
+		if _, err := svc.ListUsers(ctx, 500, 1); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if repo.listInputs[0].limit != 200 {
+			t.Fatalf("expected limit clamped to 200, got %d", repo.listInputs[0].limit)
+		}
+	})
+
+	t.Run("propagates repository error", func(t *testing.T) {
+		repo := &fakeUserRepo{listErr: errors.New("boom")}
+		svc := newAuthServiceForTests(repo, &fakeRoleRepo{}, &fakeSessionRepo{}, &fakeStorage{}, nil, nil)
+
+		if _, err := svc.ListUsers(ctx, 10, 0); err == nil {
+			t.Fatalf("expected error from repository")
+		}
+	})
+}
+
+func TestDeleteUser(t *testing.T) {
+	ctx := context.Background()
+	adminRoleID := uuid.New()
+	roleRepo := &fakeRoleRepo{roleResult: &domain.Role{ID: adminRoleID}}
+
+	t.Run("denies when actor missing", func(t *testing.T) {
+		svc := newAuthServiceForTests(&fakeUserRepo{}, roleRepo, &fakeSessionRepo{}, &fakeStorage{}, nil, nil)
+		err := svc.DeleteUser(ctx, nil, uuid.New())
+		if !errors.Is(err, ErrForbidden) {
+			t.Fatalf("expected ErrForbidden, got %v", err)
+		}
+	})
+
+	t.Run("allows self deletion", func(t *testing.T) {
+		repo := &fakeUserRepo{}
+		svc := newAuthServiceForTests(repo, roleRepo, &fakeSessionRepo{}, &fakeStorage{}, nil, nil)
+		userID := uuid.New()
+		actor := &domain.User{ID: userID}
+		if err := svc.DeleteUser(ctx, actor, userID); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if repo.deleteInput != userID {
+			t.Fatalf("expected delete call for %s, got %s", userID, repo.deleteInput)
+		}
+	})
+
+	t.Run("denies non-admin deleting others", func(t *testing.T) {
+		repo := &fakeUserRepo{}
+		svc := newAuthServiceForTests(repo, roleRepo, &fakeSessionRepo{}, &fakeStorage{}, nil, nil)
+		actor := &domain.User{ID: uuid.New(), RoleID: uuid.New()}
+		err := svc.DeleteUser(ctx, actor, uuid.New())
+		if !errors.Is(err, ErrForbidden) {
+			t.Fatalf("expected ErrForbidden, got %v", err)
+		}
+		if repo.deleteInput != uuid.Nil {
+			t.Fatalf("expected repository delete not called, got %s", repo.deleteInput)
+		}
+	})
+
+	t.Run("admin can delete others", func(t *testing.T) {
+		repo := &fakeUserRepo{}
+		svc := newAuthServiceForTests(repo, roleRepo, &fakeSessionRepo{}, &fakeStorage{}, nil, nil)
+		actor := &domain.User{ID: uuid.New(), RoleID: adminRoleID}
+		target := uuid.New()
+		if err := svc.DeleteUser(ctx, actor, target); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if repo.deleteInput != target {
+			t.Fatalf("expected delete call for %s, got %s", target, repo.deleteInput)
+		}
+	})
+
+	t.Run("translates missing user", func(t *testing.T) {
+		repo := &fakeUserRepo{deleteErr: sql.ErrNoRows}
+		svc := newAuthServiceForTests(repo, roleRepo, &fakeSessionRepo{}, &fakeStorage{}, nil, nil)
+		actor := &domain.User{ID: uuid.New(), RoleID: adminRoleID}
+		err := svc.DeleteUser(ctx, actor, uuid.New())
+		if !errors.Is(err, ErrUserNotFound) {
+			t.Fatalf("expected ErrUserNotFound, got %v", err)
+		}
+	})
+
+	t.Run("propagates delete error", func(t *testing.T) {
+		repo := &fakeUserRepo{deleteErr: errors.New("db down")}
+		svc := newAuthServiceForTests(repo, roleRepo, &fakeSessionRepo{}, &fakeStorage{}, nil, nil)
+		actor := &domain.User{ID: uuid.New(), RoleID: adminRoleID}
+		err := svc.DeleteUser(ctx, actor, uuid.New())
+		if err == nil || !strings.Contains(err.Error(), "db down") {
+			t.Fatalf("expected underlying error, got %v", err)
+		}
+	})
 }
 
 func stringPtr(v string) *string {

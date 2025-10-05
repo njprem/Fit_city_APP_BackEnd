@@ -15,4 +15,6 @@ type UserRepository interface {
 	FindByID(ctx context.Context, id uuid.UUID) (*domain.User, error)
 	UpdateProfile(ctx context.Context, id uuid.UUID, fullName *string, username *string, imageURL *string, profileCompleted bool) (*domain.User, error)
 	UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash, passwordSalt []byte) error
+	List(ctx context.Context, limit, offset int) ([]domain.User, error)
+	Delete(ctx context.Context, id uuid.UUID) error
 }

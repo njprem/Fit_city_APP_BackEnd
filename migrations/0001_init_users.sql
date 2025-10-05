@@ -74,3 +74,7 @@ ALTER TABLE user_role_change_handler
 INSERT INTO role (role_name, description)
 VALUES ('user', 'Default application role for authenticated users')
 ON CONFLICT (role_name) DO NOTHING;
+
+INSERT INTO role (role_name, description)
+VALUES ('admin', 'Administrator role with elevated permissions')
+ON CONFLICT (role_name) DO NOTHING;

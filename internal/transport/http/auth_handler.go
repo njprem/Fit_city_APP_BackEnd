@@ -2,9 +2,11 @@ package http
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
 	"github.com/njprem/Fit_city_APP_BackEnd/internal/domain"
@@ -34,6 +36,8 @@ func RegisterAuth(e *echo.Echo, auth *service.AuthService) {
 	group.POST("/password/reset-confirm", handler.resetPasswordConfirm)
 	group.GET("/me", handler.me, handler.requireAuth())
 	group.POST("/profile", handler.completeProfile, handler.requireAuth())
+	group.GET("/users", handler.listUsers, handler.requireAuth())
+	group.DELETE("/users/:id", handler.deleteUser, handler.requireAuth())
 }
 
 func (h *AuthHandler) registerEmail(c echo.Context) error {
@@ -239,6 +243,73 @@ func (h *AuthHandler) logout(c echo.Context) error {
 	return c.JSON(http.StatusOK, util.Envelope{"success": true})
 }
 
+func (h *AuthHandler) listUsers(c echo.Context) error {
+	limit := 50
+	if raw := c.QueryParam("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed <= 0 {
+			return c.JSON(http.StatusBadRequest, util.Error("limit must be a positive integer"))
+		}
+		limit = parsed
+	}
+	if limit > 200 {
+		limit = 200
+	}
+
+	offset := 0
+	if raw := c.QueryParam("offset"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 0 {
+			return c.JSON(http.StatusBadRequest, util.Error("offset must be zero or a positive integer"))
+		}
+		offset = parsed
+	}
+
+	users, err := h.auth.ListUsers(c.Request().Context(), limit, offset)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, util.Error("unable to list users"))
+	}
+
+	items := make([]util.Envelope, len(users))
+	for i := range users {
+		items[i] = sanitizeUser(&users[i])
+	}
+
+	return c.JSON(http.StatusOK, util.Envelope{
+		"users": items,
+		"meta": util.Envelope{
+			"limit":  limit,
+			"offset": offset,
+			"count":  len(items),
+		},
+	})
+}
+
+func (h *AuthHandler) deleteUser(c echo.Context) error {
+	actor, ok := c.Get(contextUserKey).(*domain.User)
+	if !ok || actor == nil {
+		return c.JSON(http.StatusInternalServerError, util.Error("user context missing"))
+	}
+
+	userID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, util.Error("invalid user id"))
+	}
+
+	if err := h.auth.DeleteUser(c.Request().Context(), actor, userID); err != nil {
+		switch err {
+		case service.ErrUserNotFound:
+			return c.JSON(http.StatusNotFound, util.Error(err.Error()))
+		case service.ErrForbidden:
+			return c.JSON(http.StatusForbidden, util.Error(err.Error()))
+		default:
+			return c.JSON(http.StatusInternalServerError, util.Error("unable to delete user"))
+		}
+	}
+
+	return c.JSON(http.StatusOK, util.Envelope{"success": true})
+}
+
 func (h *AuthHandler) requireAuth() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
@@ -273,6 +344,9 @@ func sanitizeUser(user *domain.User) util.Envelope {
 		"profile_completed": user.ProfileCompleted,
 		"created_at":        user.CreatedAt,
 		"updated_at":        user.UpdatedAt,
+	}
+	if user.RoleName != nil {
+		payload["role_name"] = *user.RoleName
 	}
 	if user.Username != nil {
 		payload["username"] = *user.Username

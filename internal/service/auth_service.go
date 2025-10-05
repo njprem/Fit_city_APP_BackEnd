@@ -30,6 +30,8 @@ var (
 	ErrPasswordMismatch    = errors.New("current password is incorrect")
 	ErrResetOTPInvalid     = errors.New("password reset code invalid")
 	ErrResetOTPExpired     = errors.New("password reset code expired")
+	ErrForbidden           = errors.New("forbidden")
+	ErrUserNotFound        = errors.New("user not found")
 )
 
 const maxGoogleProfileImageBytes int64 = 5 * 1024 * 1024
@@ -66,6 +68,7 @@ type AuthService struct {
 	googleAudience  string
 	profileBucket   string
 	defaultRoleName string
+	adminRoleName   string
 	httpClient      httpDoer
 	mailer          PasswordResetSender
 	resetTTL        time.Duration
@@ -89,6 +92,7 @@ func NewAuthService(users ports.UserRepository, roles ports.RoleRepository, sess
 		googleAudience:  googleAudience,
 		profileBucket:   profileBucket,
 		defaultRoleName: "user",
+		adminRoleName:   "admin",
 		httpClient:      &http.Client{Timeout: 10 * time.Second},
 		mailer:          mailer,
 		resetTTL:        resetTTL,
@@ -462,6 +466,43 @@ func (s *AuthService) Authenticate(ctx context.Context, token string) (*domain.U
 
 func (s *AuthService) Logout(ctx context.Context, token string) error {
 	return s.sessions.DeactivateSession(ctx, token)
+}
+
+func (s *AuthService) ListUsers(ctx context.Context, limit, offset int) ([]domain.User, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	return s.users.List(ctx, limit, offset)
+}
+
+func (s *AuthService) DeleteUser(ctx context.Context, actor *domain.User, target uuid.UUID) error {
+	if actor == nil {
+		return ErrForbidden
+	}
+
+	if actor.ID != target {
+		adminRole, err := s.roles.GetOrCreateRole(ctx, s.adminRoleName, "Administrator role with elevated permissions")
+		if err != nil {
+			return err
+		}
+		if actor.RoleID != adminRole.ID {
+			return ErrForbidden
+		}
+	}
+
+	if err := s.users.Delete(ctx, target); err != nil {
+		if isNotFound(err) {
+			return ErrUserNotFound
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *AuthService) issueSession(ctx context.Context, user *domain.User) (*AuthResult, error) {

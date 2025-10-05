@@ -13,6 +13,7 @@ type User struct {
 	FullName         *string   `db:"full_name" json:"full_name,omitempty"`
 	ImageURL         *string   `db:"user_image_url" json:"user_image_url,omitempty"`
 	RoleID           uuid.UUID `db:"role_id" json:"role_id"`
+	RoleName         *string   `db:"role_name" json:"role_name,omitempty"`
 	PasswordHash     []byte    `db:"password_hash" json:"-"`
 	PasswordSalt     []byte    `db:"password_salt" json:"-"`
 	ProfileCompleted bool      `db:"profile_completed" json:"profile_completed"`

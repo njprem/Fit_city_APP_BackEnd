@@ -132,6 +132,38 @@
     .profile-image-url a:hover {
       text-decoration: underline;
     }
+    .user-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: 12px;
+    }
+    .user-list li {
+      border: 1px solid #d0d7e7;
+      border-radius: 8px;
+      padding: 12px;
+      background: #f9fafc;
+      display: grid;
+      gap: 6px;
+      font-size: 0.9rem;
+    }
+    .user-list li .user-meta {
+      font-size: 0.75rem;
+      color: #5c6b80;
+    }
+    .user-list li .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    button.danger {
+      background: #d14343;
+    }
+    button.danger:hover {
+      background: #aa2c2c;
+    }
   </style>
 </head>
 <body>
@@ -227,6 +259,20 @@
     </section>
 
     <section>
+      <h2>User Directory</h2>
+      <p class="muted">Calls <code>/api/v1/auth/users</code> with the stored token. Limit is capped at 200 by the API.</p>
+      <label for="userListLimit">Limit</label>
+      <input id="userListLimit" type="number" min="1" max="200" value="20" />
+      <label for="userListOffset">Offset</label>
+      <input id="userListOffset" type="number" min="0" value="0" />
+      <button id="userListSubmit">Fetch users</button>
+      <pre id="userListResult"></pre>
+      <div id="userListMeta" class="muted">Run the request to see pagination metadata.</div>
+      <div id="userListEmpty" class="muted">No users loaded yet.</div>
+      <ul id="userListItems" class="user-list hidden"></ul>
+    </section>
+
+    <section>
       <h2>Who Am I</h2>
       <p class="muted">Calls <code>/api/v1/auth/me</code> using the stored token.</p>
       <button id="meSubmit">Fetch profile</button>
@@ -239,6 +285,7 @@
           <div><strong>Email:</strong><span id="profileFieldEmail" class="value">&mdash;</span></div>
           <div><strong>Username:</strong><span id="profileFieldUsername" class="value">&mdash;</span></div>
           <div><strong>Full name:</strong><span id="profileFieldFullName" class="value">&mdash;</span></div>
+          <div><strong>Role name:</strong><span id="profileFieldRoleName" class="value">&mdash;</span></div>
           <div><strong>Role ID:</strong><span id="profileFieldRole" class="value">&mdash;</span></div>
           <div><strong>Profile completed:</strong><span id="profileFieldCompleted" class="value">&mdash;</span></div>
           <div><strong>Created at:</strong><span id="profileFieldCreatedAt" class="value">&mdash;</span></div>
@@ -277,10 +324,17 @@
         username: $('profileFieldUsername'),
         fullName: $('profileFieldFullName'),
         role: $('profileFieldRole'),
+        roleName: $('profileFieldRoleName'),
         profileCompleted: $('profileFieldCompleted'),
         createdAt: $('profileFieldCreatedAt'),
         updatedAt: $('profileFieldUpdatedAt'),
       },
+    };
+
+    const userListUI = {
+      meta: $('userListMeta'),
+      empty: $('userListEmpty'),
+      list: $('userListItems'),
     };
 
     function updateToken(newToken) {
@@ -390,6 +444,7 @@
       setField('email', user.email || '—');
       setField('username', user.username || '—');
       setField('fullName', user.full_name || '—');
+      setField('roleName', user.role_name || '—');
       setField('role', user.role_id || '—');
       if (typeof user.profile_completed === 'boolean') {
         setField('profileCompleted', user.profile_completed ? 'Yes' : 'No');
@@ -426,6 +481,185 @@
       }
     }
 
+    function renderUserList(result) {
+      if (!userListUI.list) {
+        return;
+      }
+
+      const resetList = () => {
+        userListUI.list.classList.add('hidden');
+        userListUI.list.innerHTML = '';
+      };
+
+      if (!result) {
+        resetList();
+        if (userListUI.meta) {
+          userListUI.meta.textContent = '';
+        }
+        if (userListUI.empty) {
+          userListUI.empty.textContent = 'No users loaded yet.';
+          userListUI.empty.classList.remove('hidden');
+        }
+        return;
+      }
+
+      if (result.status <= 0 || result.status >= 400) {
+        resetList();
+        if (userListUI.meta) {
+          const message = result && result.body && result.body.error ? `Error: ${result.body.error}` : '';
+          userListUI.meta.textContent = message;
+        }
+        if (userListUI.empty) {
+          const message = result && result.body && result.body.error ? result.body.error : 'Request failed';
+          userListUI.empty.textContent = `${message} (status ${result.status}).`;
+          userListUI.empty.classList.remove('hidden');
+        }
+        return;
+      }
+
+      const payload = result.body && typeof result.body === 'object' ? result.body : {};
+      const users = Array.isArray(payload.users) ? payload.users : [];
+      const meta = payload.meta && typeof payload.meta === 'object' ? payload.meta : null;
+
+      if (userListUI.meta) {
+        if (meta) {
+          const limitText = meta.limit ?? users.length;
+          const offsetText = meta.offset ?? 0;
+          const countText = meta.count ?? users.length;
+          userListUI.meta.textContent = `Limit ${limitText}, offset ${offsetText}, returned ${countText} user(s).`;
+        } else {
+          userListUI.meta.textContent = `Returned ${users.length} user(s).`;
+        }
+      }
+
+      if (!users.length) {
+        resetList();
+        if (userListUI.empty) {
+          userListUI.empty.textContent = 'No users returned.';
+          userListUI.empty.classList.remove('hidden');
+        }
+        return;
+      }
+
+      userListUI.list.innerHTML = '';
+      users.forEach((user) => {
+        const item = document.createElement('li');
+
+        const emailRow = document.createElement('div');
+        const emailLabel = document.createElement('strong');
+        emailLabel.textContent = 'Email:';
+        emailRow.appendChild(emailLabel);
+        emailRow.append(' ', user && user.email ? user.email : '—');
+
+        const usernameRow = document.createElement('div');
+        const usernameLabel = document.createElement('strong');
+        usernameLabel.textContent = 'Username:';
+        usernameRow.appendChild(usernameLabel);
+        usernameRow.append(' ', user && user.username ? user.username : '—');
+
+        const fullNameRow = document.createElement('div');
+        const fullNameLabel = document.createElement('strong');
+        fullNameLabel.textContent = 'Full name:';
+        fullNameRow.appendChild(fullNameLabel);
+        fullNameRow.append(' ', user && user.full_name ? user.full_name : '—');
+
+        const metaRow = document.createElement('div');
+        metaRow.className = 'user-meta';
+        const profileDone = user && typeof user.profile_completed === 'boolean' ? (user.profile_completed ? 'Yes' : 'No') : '—';
+        const roleName = user && user.role_name ? user.role_name : '—';
+        const roleId = user && user.role_id ? user.role_id : '—';
+        const userId = user && user.id ? user.id : '—';
+        metaRow.textContent = `ID: ${userId} · Role: ${roleName} (${roleId}) · Profile complete: ${profileDone}`;
+
+        const timestampRow = document.createElement('div');
+        timestampRow.className = 'user-meta';
+        const created = user && user.created_at ? formatDate(user.created_at) : '—';
+        const updated = user && user.updated_at ? formatDate(user.updated_at) : '—';
+        timestampRow.textContent = `Created: ${created} · Updated: ${updated}`;
+
+        item.appendChild(emailRow);
+        item.appendChild(usernameRow);
+        item.appendChild(fullNameRow);
+        item.appendChild(metaRow);
+        item.appendChild(timestampRow);
+
+        const actionsRow = document.createElement('div');
+        actionsRow.className = 'actions';
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.textContent = 'Delete user';
+        deleteBtn.className = 'danger';
+        if (!user || !user.id) {
+          deleteBtn.disabled = true;
+        } else {
+          deleteBtn.addEventListener('click', async () => {
+            if (!window.confirm(`Delete user ${user.email || user.id}? This cannot be undone.`)) {
+              return;
+            }
+            const originalLabel = deleteBtn.textContent;
+            deleteBtn.disabled = true;
+            deleteBtn.textContent = 'Deleting…';
+            try {
+              const result = await request(`/api/v1/auth/users/${user.id}`, {
+                method: 'DELETE',
+              });
+              $('userListResult').textContent = pretty(result);
+              if (result.status < 400) {
+                await loadUserList();
+                $('userListResult').textContent = pretty(result);
+              } else if (userListUI.meta) {
+                const message = result && result.body && result.body.error ? result.body.error : 'Delete failed';
+                userListUI.meta.textContent = `${message} (status ${result.status}).`;
+              }
+            } catch (err) {
+              const fallback = { status: 0, body: err && err.message ? err.message : 'Delete request failed' };
+              $('userListResult').textContent = pretty(fallback);
+              if (userListUI.meta) {
+                userListUI.meta.textContent = 'Delete request failed.';
+              }
+            } finally {
+              deleteBtn.textContent = originalLabel;
+              deleteBtn.disabled = false;
+            }
+          });
+        }
+        actionsRow.appendChild(deleteBtn);
+        item.appendChild(actionsRow);
+
+        userListUI.list.appendChild(item);
+      });
+
+      userListUI.list.classList.remove('hidden');
+      if (userListUI.empty) {
+        userListUI.empty.classList.add('hidden');
+      }
+    }
+
+    async function loadUserList() {
+      const limitValue = parseInt($('userListLimit').value, 10);
+      const offsetValue = parseInt($('userListOffset').value, 10);
+      const params = new URLSearchParams();
+      if (Number.isFinite(limitValue) && limitValue > 0) {
+        params.set('limit', String(limitValue));
+      }
+      if (Number.isFinite(offsetValue) && offsetValue >= 0) {
+        params.set('offset', String(offsetValue));
+      }
+      const query = params.toString();
+      const path = `/api/v1/auth/users${query ? `?${query}` : ''}`;
+      try {
+        const result = await request(path);
+        $('userListResult').textContent = pretty(result);
+        renderUserList(result);
+        return result;
+      } catch (err) {
+        const fallback = { status: 0, body: err && err.message ? err.message : 'Request failed' };
+        $('userListResult').textContent = pretty(fallback);
+        renderUserList(fallback);
+        return fallback;
+      }
+    }
+
     function updateProfileFromResult(result) {
       if (!result) {
         return;
@@ -444,6 +678,7 @@
     }
 
     renderProfile(null);
+    renderUserList(null);
     if (profileUI.avatar) {
       profileUI.avatar.addEventListener('error', () => {
         if (profileUI.avatar.src !== PLACEHOLDER_IMAGE) {
@@ -633,6 +868,13 @@
         $('resetNewPassword').value = '';
       }
     });
+
+    const userListButton = $('userListSubmit');
+    if (userListButton) {
+      userListButton.addEventListener('click', () => {
+        loadUserList();
+      });
+    }
 
     $('meSubmit').addEventListener('click', async () => {
       const result = await request('/api/v1/auth/me');
