@@ -23,14 +23,12 @@ type fakeUserRepo struct {
 	createEmailEmail  string
 	createEmailHash   []byte
 	createEmailSalt   []byte
-	createEmailRoleID uuid.UUID
 	createEmailResult *domain.User
 	createEmailErr    error
 
 	upsertGoogleEmail  string
 	upsertGoogleName   *string
 	upsertGoogleImg    *string
-	upsertGoogleRoleID uuid.UUID
 	upsertGoogleResult *domain.User
 	upsertGoogleErr    error
 
@@ -70,19 +68,17 @@ type fakeUserRepo struct {
 	deleteErr   error
 }
 
-func (f *fakeUserRepo) CreateEmailUser(ctx context.Context, email string, passwordHash, passwordSalt []byte, roleID uuid.UUID) (*domain.User, error) {
+func (f *fakeUserRepo) CreateEmailUser(ctx context.Context, email string, passwordHash, passwordSalt []byte) (*domain.User, error) {
 	f.createEmailEmail = email
 	f.createEmailHash = append([]byte(nil), passwordHash...)
 	f.createEmailSalt = append([]byte(nil), passwordSalt...)
-	f.createEmailRoleID = roleID
 	return f.createEmailResult, f.createEmailErr
 }
 
-func (f *fakeUserRepo) UpsertGoogleUser(ctx context.Context, email string, fullName *string, imageURL *string, roleID uuid.UUID) (*domain.User, error) {
+func (f *fakeUserRepo) UpsertGoogleUser(ctx context.Context, email string, fullName *string, imageURL *string) (*domain.User, error) {
 	f.upsertGoogleEmail = email
 	f.upsertGoogleName = fullName
 	f.upsertGoogleImg = imageURL
-	f.upsertGoogleRoleID = roleID
 	return f.upsertGoogleResult, f.upsertGoogleErr
 }
 
@@ -383,7 +379,12 @@ func newAuthServiceForTests(user *fakeUserRepo, role *fakeRoleRepo, session *fak
 func TestRegisterWithEmailSuccess(t *testing.T) {
 	ctx := context.Background()
 	roleID := uuid.New()
-	userRepo := &fakeUserRepo{createEmailResult: &domain.User{ID: uuid.New(), Email: "test@example.com", RoleID: roleID, CreatedAt: time.Now(), UpdatedAt: time.Now()}}
+	userID := uuid.New()
+	role := domain.Role{ID: roleID, Name: "user", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	userRepo := &fakeUserRepo{
+		createEmailResult: &domain.User{ID: userID, Email: "test@example.com", CreatedAt: time.Now(), UpdatedAt: time.Now()},
+		findByIDResult:    &domain.User{ID: userID, Email: "test@example.com", CreatedAt: time.Now(), UpdatedAt: time.Now(), Roles: []domain.Role{role}},
+	}
 	roleRepo := &fakeRoleRepo{roleResult: &domain.Role{ID: roleID}}
 	sessionRepo := &fakeSessionRepo{}
 	storage := &fakeStorage{}
@@ -408,6 +409,12 @@ func TestRegisterWithEmailSuccess(t *testing.T) {
 	}
 	if len(roleRepo.assignedPairs) != 1 || roleRepo.assignedPairs[0].roleID != roleID {
 		t.Fatalf("expected role assignment to be recorded")
+	}
+	if userRepo.findByIDInput != userID {
+		t.Fatalf("expected user to be reloaded after role assignment")
+	}
+	if result.User == nil || !result.User.HasRole(roleID) {
+		t.Fatal("expected resulting user to include assigned role")
 	}
 	if result.Token == "" {
 		t.Fatal("expected JWT token in result")
@@ -459,7 +466,8 @@ func TestLoginWithEmailInvalidCredentials(t *testing.T) {
 
 func TestLoginWithEmailSuccess(t *testing.T) {
 	hash, salt, _ := util.DerivePassword("right-password")
-	user := &domain.User{ID: uuid.New(), Email: "test@example.com", PasswordHash: hash, PasswordSalt: salt, RoleID: uuid.New(), CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	role := domain.Role{ID: uuid.New(), Name: "user", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	user := &domain.User{ID: uuid.New(), Email: "test@example.com", PasswordHash: hash, PasswordSalt: salt, CreatedAt: time.Now(), UpdatedAt: time.Now(), Roles: []domain.Role{role}}
 	userRepo := &fakeUserRepo{findByEmailResult: user}
 	sessionRepo := &fakeSessionRepo{}
 	svc := newAuthServiceForTests(userRepo, &fakeRoleRepo{}, sessionRepo, &fakeStorage{}, nil, nil)
@@ -473,6 +481,9 @@ func TestLoginWithEmailSuccess(t *testing.T) {
 	}
 	if result.User == nil || result.User.ID != user.ID {
 		t.Fatalf("unexpected user in response")
+	}
+	if !result.User.HasRole(role.ID) {
+		t.Fatal("expected returned user to retain roles")
 	}
 }
 
@@ -892,7 +903,7 @@ func TestDeleteUser(t *testing.T) {
 	t.Run("denies non-admin deleting others", func(t *testing.T) {
 		repo := &fakeUserRepo{}
 		svc := newAuthServiceForTests(repo, roleRepo, &fakeSessionRepo{}, &fakeStorage{}, nil, nil)
-		actor := &domain.User{ID: uuid.New(), RoleID: uuid.New()}
+		actor := &domain.User{ID: uuid.New(), Roles: []domain.Role{{ID: uuid.New(), Name: "user", CreatedAt: time.Now(), UpdatedAt: time.Now()}}}
 		err := svc.DeleteUser(ctx, actor, uuid.New())
 		if !errors.Is(err, ErrForbidden) {
 			t.Fatalf("expected ErrForbidden, got %v", err)
@@ -905,7 +916,7 @@ func TestDeleteUser(t *testing.T) {
 	t.Run("admin can delete others", func(t *testing.T) {
 		repo := &fakeUserRepo{}
 		svc := newAuthServiceForTests(repo, roleRepo, &fakeSessionRepo{}, &fakeStorage{}, nil, nil)
-		actor := &domain.User{ID: uuid.New(), RoleID: adminRoleID}
+		actor := &domain.User{ID: uuid.New(), Roles: []domain.Role{{ID: adminRoleID, Name: "admin", CreatedAt: time.Now(), UpdatedAt: time.Now()}}}
 		target := uuid.New()
 		if err := svc.DeleteUser(ctx, actor, target); err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -918,7 +929,7 @@ func TestDeleteUser(t *testing.T) {
 	t.Run("translates missing user", func(t *testing.T) {
 		repo := &fakeUserRepo{deleteErr: sql.ErrNoRows}
 		svc := newAuthServiceForTests(repo, roleRepo, &fakeSessionRepo{}, &fakeStorage{}, nil, nil)
-		actor := &domain.User{ID: uuid.New(), RoleID: adminRoleID}
+		actor := &domain.User{ID: uuid.New(), Roles: []domain.Role{{ID: adminRoleID, Name: "admin", CreatedAt: time.Now(), UpdatedAt: time.Now()}}}
 		err := svc.DeleteUser(ctx, actor, uuid.New())
 		if !errors.Is(err, ErrUserNotFound) {
 			t.Fatalf("expected ErrUserNotFound, got %v", err)
@@ -928,7 +939,7 @@ func TestDeleteUser(t *testing.T) {
 	t.Run("propagates delete error", func(t *testing.T) {
 		repo := &fakeUserRepo{deleteErr: errors.New("db down")}
 		svc := newAuthServiceForTests(repo, roleRepo, &fakeSessionRepo{}, &fakeStorage{}, nil, nil)
-		actor := &domain.User{ID: uuid.New(), RoleID: adminRoleID}
+		actor := &domain.User{ID: uuid.New(), Roles: []domain.Role{{ID: adminRoleID, Name: "admin", CreatedAt: time.Now(), UpdatedAt: time.Now()}}}
 		err := svc.DeleteUser(ctx, actor, uuid.New())
 		if err == nil || !strings.Contains(err.Error(), "db down") {
 			t.Fatalf("expected underlying error, got %v", err)

@@ -285,8 +285,8 @@
           <div><strong>Email:</strong><span id="profileFieldEmail" class="value">&mdash;</span></div>
           <div><strong>Username:</strong><span id="profileFieldUsername" class="value">&mdash;</span></div>
           <div><strong>Full name:</strong><span id="profileFieldFullName" class="value">&mdash;</span></div>
-          <div><strong>Role name:</strong><span id="profileFieldRoleName" class="value">&mdash;</span></div>
-          <div><strong>Role ID:</strong><span id="profileFieldRole" class="value">&mdash;</span></div>
+          <div><strong>Primary role:</strong><span id="profileFieldPrimaryRole" class="value">&mdash;</span></div>
+          <div><strong>All roles:</strong><span id="profileFieldRoles" class="value">&mdash;</span></div>
           <div><strong>Profile completed:</strong><span id="profileFieldCompleted" class="value">&mdash;</span></div>
           <div><strong>Created at:</strong><span id="profileFieldCreatedAt" class="value">&mdash;</span></div>
           <div><strong>Updated at:</strong><span id="profileFieldUpdatedAt" class="value">&mdash;</span></div>
@@ -323,8 +323,8 @@
         email: $('profileFieldEmail'),
         username: $('profileFieldUsername'),
         fullName: $('profileFieldFullName'),
-        role: $('profileFieldRole'),
-        roleName: $('profileFieldRoleName'),
+        primaryRole: $('profileFieldPrimaryRole'),
+        roles: $('profileFieldRoles'),
         profileCompleted: $('profileFieldCompleted'),
         createdAt: $('profileFieldCreatedAt'),
         updatedAt: $('profileFieldUpdatedAt'),
@@ -444,8 +444,26 @@
       setField('email', user.email || '—');
       setField('username', user.username || '—');
       setField('fullName', user.full_name || '—');
-      setField('roleName', user.role_name || '—');
-      setField('role', user.role_id || '—');
+      const roles = Array.isArray(user.roles) ? user.roles : [];
+      if (roles.length > 0) {
+        const primary = roles[0] || {};
+        const primaryName = primary.role_name || primary.name || '';
+        const primaryId = primary.id || '';
+        const primaryLabel = [primaryName, primaryId ? `(${primaryId})` : '']
+          .filter(Boolean)
+          .join(' ');
+        setField('primaryRole', primaryLabel || '—');
+
+        const formatted = roles.map((role) => {
+          const name = role.role_name || role.name || '';
+          const identifier = role.id ? `(${role.id})` : '';
+          return [name, identifier].filter(Boolean).join(' ');
+        });
+        setField('roles', formatted.join(', '));
+      } else {
+        setField('primaryRole', '—');
+        setField('roles', '—');
+      }
       if (typeof user.profile_completed === 'boolean') {
         setField('profileCompleted', user.profile_completed ? 'Yes' : 'No');
       } else {
@@ -566,10 +584,18 @@
         const metaRow = document.createElement('div');
         metaRow.className = 'user-meta';
         const profileDone = user && typeof user.profile_completed === 'boolean' ? (user.profile_completed ? 'Yes' : 'No') : '—';
-        const roleName = user && user.role_name ? user.role_name : '—';
-        const roleId = user && user.role_id ? user.role_id : '—';
+        const roles = user && Array.isArray(user.roles) ? user.roles : [];
+        const roleSummary = roles.length
+          ? roles
+              .map((role) => {
+                const name = role && (role.role_name || role.name) ? (role.role_name || role.name) : '';
+                const identifier = role && role.id ? `(${role.id})` : '';
+                return [name, identifier].filter(Boolean).join(' ');
+              })
+              .join(', ')
+          : '—';
         const userId = user && user.id ? user.id : '—';
-        metaRow.textContent = `ID: ${userId} · Role: ${roleName} (${roleId}) · Profile complete: ${profileDone}`;
+        metaRow.textContent = `ID: ${userId} · Roles: ${roleSummary} · Profile complete: ${profileDone}`;
 
         const timestampRow = document.createElement('div');
         timestampRow.className = 'user-meta';

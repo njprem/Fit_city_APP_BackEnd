@@ -340,13 +340,27 @@ func sanitizeUser(user *domain.User) util.Envelope {
 	payload := util.Envelope{
 		"id":                user.ID,
 		"email":             user.Email,
-		"role_id":           user.RoleID,
 		"profile_completed": user.ProfileCompleted,
 		"created_at":        user.CreatedAt,
 		"updated_at":        user.UpdatedAt,
 	}
-	if user.RoleName != nil {
-		payload["role_name"] = *user.RoleName
+	if len(user.Roles) > 0 {
+		roles := make([]util.Envelope, len(user.Roles))
+		for i, role := range user.Roles {
+			entry := util.Envelope{
+				"id":         role.ID,
+				"role_name":  role.Name,
+				"created_at": role.CreatedAt,
+				"updated_at": role.UpdatedAt,
+			}
+			if role.Description != nil {
+				entry["description"] = *role.Description
+			}
+			roles[i] = entry
+		}
+		payload["roles"] = roles
+		payload["role_id"] = user.Roles[0].ID
+		payload["role_name"] = user.Roles[0].Name
 	}
 	if user.Username != nil {
 		payload["username"] = *user.Username

@@ -15,7 +15,6 @@ CREATE TABLE IF NOT EXISTS user_account (
     full_name TEXT,
     user_image_url TEXT,
     email TEXT UNIQUE NOT NULL,
-    role_id UUID NOT NULL REFERENCES role(id),
     password_hash BYTEA,
     password_salt BYTEA,
     profile_completed BOOLEAN NOT NULL DEFAULT FALSE,

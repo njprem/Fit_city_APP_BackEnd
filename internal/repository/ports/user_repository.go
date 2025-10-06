@@ -9,8 +9,8 @@ import (
 )
 
 type UserRepository interface {
-	CreateEmailUser(ctx context.Context, email string, passwordHash, passwordSalt []byte, roleID uuid.UUID) (*domain.User, error)
-	UpsertGoogleUser(ctx context.Context, email string, fullName *string, imageURL *string, roleID uuid.UUID) (*domain.User, error)
+	CreateEmailUser(ctx context.Context, email string, passwordHash, passwordSalt []byte) (*domain.User, error)
+	UpsertGoogleUser(ctx context.Context, email string, fullName *string, imageURL *string) (*domain.User, error)
 	FindByEmail(ctx context.Context, email string) (*domain.User, error)
 	FindByID(ctx context.Context, id uuid.UUID) (*domain.User, error)
 	UpdateProfile(ctx context.Context, id uuid.UUID, fullName *string, username *string, imageURL *string, profileCompleted bool) (*domain.User, error)

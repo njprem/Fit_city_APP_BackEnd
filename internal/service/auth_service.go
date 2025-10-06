@@ -116,7 +116,7 @@ func (s *AuthService) RegisterWithEmail(ctx context.Context, email, password str
 		return nil, err
 	}
 
-	user, err := s.users.CreateEmailUser(ctx, email, hash, salt, role.ID)
+	user, err := s.users.CreateEmailUser(ctx, email, hash, salt)
 	if err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrEmailAlreadyUsed
@@ -125,6 +125,10 @@ func (s *AuthService) RegisterWithEmail(ctx context.Context, email, password str
 	}
 
 	if err = s.roles.AssignUserRole(ctx, user.ID, role.ID); err != nil {
+		return nil, err
+	}
+
+	if user, err = s.users.FindByID(ctx, user.ID); err != nil {
 		return nil, err
 	}
 
@@ -191,7 +195,7 @@ func (s *AuthService) LoginWithGoogle(ctx context.Context, idToken string) (*Aut
 		}
 	}
 
-	user, err := s.users.UpsertGoogleUser(ctx, email, namePtr, picturePtr, role.ID)
+	user, err := s.users.UpsertGoogleUser(ctx, email, namePtr, picturePtr)
 	if err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrEmailAlreadyUsed
@@ -200,6 +204,10 @@ func (s *AuthService) LoginWithGoogle(ctx context.Context, idToken string) (*Aut
 	}
 
 	if err = s.roles.AssignUserRole(ctx, user.ID, role.ID); err != nil {
+		return nil, err
+	}
+
+	if user, err = s.users.FindByID(ctx, user.ID); err != nil {
 		return nil, err
 	}
 
@@ -491,7 +499,7 @@ func (s *AuthService) DeleteUser(ctx context.Context, actor *domain.User, target
 		if err != nil {
 			return err
 		}
-		if actor.RoleID != adminRole.ID {
+		if !actor.HasRole(adminRole.ID) {
 			return ErrForbidden
 		}
 	}
