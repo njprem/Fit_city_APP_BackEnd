@@ -105,6 +105,9 @@ func (s *AuthService) RegisterWithEmail(ctx context.Context, email, password str
 	if email == "" || password == "" {
 		return nil, fmt.Errorf("email and password required")
 	}
+	if err := util.ValidatePassword(password); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrPasswordTooWeak, err)
+	}
 
 	role, err := s.roles.GetOrCreateRole(ctx, s.defaultRoleName, "Default application role")
 	if err != nil {
@@ -280,8 +283,12 @@ func (s *AuthService) ConfirmPasswordReset(ctx context.Context, email, otp, newP
 	if otp == "" {
 		return ErrResetOTPInvalid
 	}
-	if strings.TrimSpace(newPassword) == "" {
+	newPassword = strings.TrimSpace(newPassword)
+	if newPassword == "" {
 		return ErrPasswordTooWeak
+	}
+	if err := util.ValidatePassword(newPassword); err != nil {
+		return fmt.Errorf("%w: %v", ErrPasswordTooWeak, err)
 	}
 
 	if s.passwordResets == nil {
@@ -420,6 +427,9 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID uuid.UUID, curr
 	newPassword = strings.TrimSpace(newPassword)
 	if newPassword == "" {
 		return ErrPasswordTooWeak
+	}
+	if err := util.ValidatePassword(newPassword); err != nil {
+		return fmt.Errorf("%w: %v", ErrPasswordTooWeak, err)
 	}
 
 	user, err := s.users.FindByID(ctx, userID)

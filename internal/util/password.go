@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"errors"
+	"unicode"
 
 	"golang.org/x/crypto/argon2"
 )
@@ -22,6 +23,32 @@ func GenerateSalt() ([]byte, error) {
 		return nil, err
 	}
 	return salt, nil
+}
+
+func ValidatePassword(password string) error {
+	if len(password) < 12 {
+		return errors.New("password must be at least 12 characters long")
+	}
+
+	var hasUpper, hasLower, hasDigit, hasSpecial bool
+	for _, r := range password {
+		switch {
+		case unicode.IsUpper(r):
+			hasUpper = true
+		case unicode.IsLower(r):
+			hasLower = true
+		case unicode.IsDigit(r):
+			hasDigit = true
+		case unicode.IsPunct(r), unicode.IsSymbol(r):
+			hasSpecial = true
+		}
+	}
+
+	if !hasUpper || !hasLower || !hasDigit || !hasSpecial {
+		return errors.New("password must include uppercase, lowercase, number, and special character")
+	}
+
+	return nil
 }
 
 func HashPassword(password string, salt []byte) ([]byte, error) {

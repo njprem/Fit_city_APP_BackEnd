@@ -391,7 +391,7 @@ func TestRegisterWithEmailSuccess(t *testing.T) {
 
 	svc := newAuthServiceForTests(userRepo, roleRepo, sessionRepo, storage, nil, nil)
 
-	result, err := svc.RegisterWithEmail(ctx, "Test@Example.com ", "super-secret")
+	result, err := svc.RegisterWithEmail(ctx, "Test@Example.com ", "SuperSecret1!")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -421,6 +421,25 @@ func TestRegisterWithEmailSuccess(t *testing.T) {
 	}
 }
 
+func TestRegisterWithEmailWeakPassword(t *testing.T) {
+	ctx := context.Background()
+	roleID := uuid.New()
+	userRepo := &fakeUserRepo{}
+	roleRepo := &fakeRoleRepo{roleResult: &domain.Role{ID: roleID}}
+	sessionRepo := &fakeSessionRepo{}
+	storage := &fakeStorage{}
+
+	svc := newAuthServiceForTests(userRepo, roleRepo, sessionRepo, storage, nil, nil)
+
+	_, err := svc.RegisterWithEmail(ctx, "weak@example.com", "weakpass")
+	if !errors.Is(err, ErrPasswordTooWeak) {
+		t.Fatalf("expected ErrPasswordTooWeak, got %v", err)
+	}
+	if len(userRepo.createEmailHash) != 0 {
+		t.Fatal("expected no password hash to be stored for invalid password")
+	}
+}
+
 func TestRegisterWithEmailEmailExists(t *testing.T) {
 	ctx := context.Background()
 	roleID := uuid.New()
@@ -431,7 +450,7 @@ func TestRegisterWithEmailEmailExists(t *testing.T) {
 
 	svc := newAuthServiceForTests(userRepo, roleRepo, sessionRepo, storage, nil, nil)
 
-	_, err := svc.RegisterWithEmail(ctx, "duplicate@example.com", "password")
+	_, err := svc.RegisterWithEmail(ctx, "duplicate@example.com", "ValidPass123!")
 	if !errors.Is(err, ErrEmailAlreadyUsed) {
 		t.Fatalf("expected ErrEmailAlreadyUsed, got %v", err)
 	}
@@ -496,7 +515,7 @@ func TestChangePassword(t *testing.T) {
 		repo := &fakeUserRepo{findByIDResult: user}
 		svc := newAuthServiceForTests(repo, &fakeRoleRepo{}, &fakeSessionRepo{}, &fakeStorage{}, nil, nil)
 
-		if err := svc.ChangePassword(ctx, user.ID, "old-pass", "new-pass"); err != nil {
+		if err := svc.ChangePassword(ctx, user.ID, "old-pass", "NewPassword1!"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if repo.updatePasswordInput.id != user.ID {
@@ -516,7 +535,7 @@ func TestChangePassword(t *testing.T) {
 		repo := &fakeUserRepo{findByIDResult: user}
 		svc := newAuthServiceForTests(repo, &fakeRoleRepo{}, &fakeSessionRepo{}, &fakeStorage{}, nil, nil)
 
-		err := svc.ChangePassword(ctx, user.ID, "wrong-pass", "new-pass")
+		err := svc.ChangePassword(ctx, user.ID, "wrong-pass", "NewPassword1!")
 		if !errors.Is(err, ErrPasswordMismatch) {
 			t.Fatalf("expected ErrPasswordMismatch, got %v", err)
 		}
@@ -532,12 +551,23 @@ func TestChangePassword(t *testing.T) {
 		}
 	})
 
+	t.Run("fails when new password lacks complexity", func(t *testing.T) {
+		user := &domain.User{ID: uuid.New()}
+		repo := &fakeUserRepo{findByIDResult: user}
+		svc := newAuthServiceForTests(repo, &fakeRoleRepo{}, &fakeSessionRepo{}, &fakeStorage{}, nil, nil)
+
+		err := svc.ChangePassword(ctx, user.ID, "", "alllowercase123")
+		if !errors.Is(err, ErrPasswordTooWeak) {
+			t.Fatalf("expected ErrPasswordTooWeak, got %v", err)
+		}
+	})
+
 	t.Run("allows setting password when none exists", func(t *testing.T) {
 		user := &domain.User{ID: uuid.New()}
 		repo := &fakeUserRepo{findByIDResult: user}
 		svc := newAuthServiceForTests(repo, &fakeRoleRepo{}, &fakeSessionRepo{}, &fakeStorage{}, nil, nil)
 
-		if err := svc.ChangePassword(ctx, user.ID, "", "fresh-pass"); err != nil {
+		if err := svc.ChangePassword(ctx, user.ID, "", "FreshPass12!"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if repo.updatePasswordInput.id != user.ID {
@@ -549,7 +579,7 @@ func TestChangePassword(t *testing.T) {
 		repo := &fakeUserRepo{findByIDErr: sql.ErrNoRows}
 		svc := newAuthServiceForTests(repo, &fakeRoleRepo{}, &fakeSessionRepo{}, &fakeStorage{}, nil, nil)
 
-		err := svc.ChangePassword(ctx, uuid.New(), "old", "new")
+		err := svc.ChangePassword(ctx, uuid.New(), "old", "NewPassword1!")
 		if !errors.Is(err, ErrInvalidCredentials) {
 			t.Fatalf("expected ErrInvalidCredentials, got %v", err)
 		}
@@ -696,7 +726,7 @@ func TestConfirmPasswordReset(t *testing.T) {
 	resetRepo := &fakePasswordResetRepo{findByUser: map[uuid.UUID]*domain.PasswordReset{user.ID: reset}}
 	svc := newAuthServiceForTests(userRepo, &fakeRoleRepo{}, &fakeSessionRepo{}, &fakeStorage{}, resetRepo, &fakeResetMailer{})
 
-	if err := svc.ConfirmPasswordReset(ctx, user.Email, "123456", "new-secret"); err != nil {
+	if err := svc.ConfirmPasswordReset(ctx, user.Email, "123456", "ResetPass12!"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(resetRepo.markCalls) == 0 {
@@ -706,11 +736,21 @@ func TestConfirmPasswordReset(t *testing.T) {
 		t.Fatalf("expected password to be updated")
 	}
 
+	t.Run("fails when new password weak", func(t *testing.T) {
+		userRepo := &fakeUserRepo{findByEmailResult: user}
+		resetRepo := &fakePasswordResetRepo{findByUser: map[uuid.UUID]*domain.PasswordReset{user.ID: reset}}
+		svc := newAuthServiceForTests(userRepo, &fakeRoleRepo{}, &fakeSessionRepo{}, &fakeStorage{}, resetRepo, &fakeResetMailer{})
+		err := svc.ConfirmPasswordReset(ctx, user.Email, "123456", "weakpassword")
+		if !errors.Is(err, ErrPasswordTooWeak) {
+			t.Fatalf("expected ErrPasswordTooWeak, got %v", err)
+		}
+	})
+
 	t.Run("invalid otp", func(t *testing.T) {
 		userRepo := &fakeUserRepo{findByEmailResult: user}
 		resetRepo := &fakePasswordResetRepo{findByUser: map[uuid.UUID]*domain.PasswordReset{user.ID: reset}}
 		svc := newAuthServiceForTests(userRepo, &fakeRoleRepo{}, &fakeSessionRepo{}, &fakeStorage{}, resetRepo, &fakeResetMailer{})
-		err := svc.ConfirmPasswordReset(ctx, user.Email, "000000", "new-secret")
+		err := svc.ConfirmPasswordReset(ctx, user.Email, "000000", "ResetPass12!")
 		if !errors.Is(err, ErrResetOTPInvalid) {
 			t.Fatalf("expected ErrResetOTPInvalid, got %v", err)
 		}
@@ -722,7 +762,7 @@ func TestConfirmPasswordReset(t *testing.T) {
 		userRepo := &fakeUserRepo{findByEmailResult: user}
 		resetRepo := &fakePasswordResetRepo{findByUser: map[uuid.UUID]*domain.PasswordReset{user.ID: &expired}}
 		svc := newAuthServiceForTests(userRepo, &fakeRoleRepo{}, &fakeSessionRepo{}, &fakeStorage{}, resetRepo, &fakeResetMailer{})
-		err := svc.ConfirmPasswordReset(ctx, user.Email, "123456", "new-secret")
+		err := svc.ConfirmPasswordReset(ctx, user.Email, "123456", "ResetPass12!")
 		if !errors.Is(err, ErrResetOTPExpired) {
 			t.Fatalf("expected ErrResetOTPExpired, got %v", err)
 		}
@@ -735,7 +775,7 @@ func TestConfirmPasswordReset(t *testing.T) {
 		userRepo := &fakeUserRepo{findByEmailErr: sql.ErrNoRows}
 		resetRepo := &fakePasswordResetRepo{}
 		svc := newAuthServiceForTests(userRepo, &fakeRoleRepo{}, &fakeSessionRepo{}, &fakeStorage{}, resetRepo, &fakeResetMailer{})
-		err := svc.ConfirmPasswordReset(ctx, user.Email, "123456", "new-secret")
+		err := svc.ConfirmPasswordReset(ctx, user.Email, "123456", "ResetPass12!")
 		if !errors.Is(err, ErrResetOTPInvalid) {
 			t.Fatalf("expected ErrResetOTPInvalid, got %v", err)
 		}
