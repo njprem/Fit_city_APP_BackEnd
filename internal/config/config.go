@@ -1,9 +1,12 @@
 package config
 
 import (
+	"log"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/joho/godotenv"
 )
 
 type Config struct {
@@ -31,6 +34,10 @@ type Config struct {
 }
 
 func Load() Config {
+	if err := godotenv.Load(); err != nil {
+		log.Printf("Warning: .env file not found: %v", err)
+	}
+
 	otpLen := 6
 	if v, err := strconv.Atoi(getenv("PASSWORD_RESET_OTP_LENGTH", "6")); err == nil && v > 0 {
 		otpLen = v
