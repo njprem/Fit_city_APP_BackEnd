@@ -1,8 +1,18 @@
+package domain
+
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
+
 type Review struct {
-  ID            int64     `db:"id" json:"id"`
-  DestinationID int64     `db:"destination_id" json:"destination_id"`
-  UserID        int64     `db:"user_id" json:"user_id"`
-  Rating        int       `db:"rating" json:"rating"` // 1..5
-  Comment       string    `db:"comment" json:"comment"`
-  CreatedAt     time.Time `db:"created_at" json:"created_at"`
+	ID            uuid.UUID `db:"id" json:"id"`
+	DestinationID uuid.UUID `db:"destination_id" json:"destination_id"`
+	UserID        uuid.UUID `db:"user_id" json:"user_id"`
+	Rating        int       `db:"rating" json:"rating"`
+	Title         *string   `db:"title" json:"title,omitempty"`
+	Content       *string   `db:"content" json:"content,omitempty"`
+	CreatedAt     time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt     time.Time `db:"updated_at" json:"updated_at"`
 }
