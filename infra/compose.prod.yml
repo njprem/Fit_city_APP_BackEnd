@@ -23,7 +23,7 @@ services:
       - ~/envs/fit-city/api.prod.env
 
     depends_on: [db, minio]
-    ports: ["8181:8080"]
+    ports: ["8181:8181"]
 
 volumes:
   pgdata:
