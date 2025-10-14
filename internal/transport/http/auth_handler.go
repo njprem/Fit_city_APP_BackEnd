@@ -40,6 +40,17 @@ func RegisterAuth(e *echo.Echo, auth *service.AuthService) {
 	group.DELETE("/users/:id", handler.deleteUser, handler.requireAuth())
 }
 
+// registerEmail handles user registration with email and password.
+// @Summary      Register with email
+// @Description  Create a new Fit City account using an email address and password.
+// @Tags         Auth
+// @Accept       json
+// @Produce      json
+// @Param        payload  body      RegisterRequest  true  "Registration payload"
+// @Success      201      {object}  AuthTokenResponse
+// @Failure      400      {object}  ErrorResponse
+// @Failure      409      {object}  ErrorResponse
+// @Router       /auth/register [post]
 func (h *AuthHandler) registerEmail(c echo.Context) error {
 	var req struct {
 		Email    string `json:"email"`
@@ -66,6 +77,17 @@ func (h *AuthHandler) registerEmail(c echo.Context) error {
 	})
 }
 
+// loginEmail issues a JWT for email and password credentials.
+// @Summary      Login with email
+// @Description  Authenticate using email/password credentials.
+// @Tags         Auth
+// @Accept       json
+// @Produce      json
+// @Param        payload  body      LoginRequest  true  "Login payload"
+// @Success      200      {object}  AuthTokenResponse
+// @Failure      400      {object}  ErrorResponse
+// @Failure      401      {object}  ErrorResponse
+// @Router       /auth/login [post]
 func (h *AuthHandler) loginEmail(c echo.Context) error {
 	var req struct {
 		Email    string `json:"email"`
@@ -90,6 +112,17 @@ func (h *AuthHandler) loginEmail(c echo.Context) error {
 	})
 }
 
+// loginGoogle exchanges a Google ID token for a Fit City session token.
+// @Summary      Login with Google
+// @Description  Authenticate using a Google Sign-In ID token.
+// @Tags         Auth
+// @Accept       json
+// @Produce      json
+// @Param        payload  body      GoogleLoginRequest  true  "Google login payload"
+// @Success      200      {object}  AuthTokenResponse
+// @Failure      400      {object}  ErrorResponse
+// @Failure      401      {object}  ErrorResponse
+// @Router       /auth/google [post]
 func (h *AuthHandler) loginGoogle(c echo.Context) error {
 	var req struct {
 		IDToken string `json:"id_token"`
@@ -110,6 +143,19 @@ func (h *AuthHandler) loginGoogle(c echo.Context) error {
 	})
 }
 
+// changePassword updates the current user's password.
+// @Summary      Change password
+// @Description  Update the authenticated user's password.
+// @Tags         Auth
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        payload  body      ChangePasswordRequest  true  "Password change payload"
+// @Success      200      {object}  SuccessResponse
+// @Failure      400      {object}  ErrorResponse
+// @Failure      401      {object}  ErrorResponse
+// @Failure      500      {object}  ErrorResponse
+// @Router       /auth/password [post]
 func (h *AuthHandler) changePassword(c echo.Context) error {
 	user, ok := c.Get(contextUserKey).(*domain.User)
 	if !ok || user == nil {
@@ -142,6 +188,17 @@ func (h *AuthHandler) changePassword(c echo.Context) error {
 	return c.JSON(http.StatusOK, util.Envelope{"success": true})
 }
 
+// resetPasswordRequest issues a password reset code to the provided email.
+// @Summary      Request password reset
+// @Description  Send a reset OTP to the provided email address.
+// @Tags         Auth
+// @Accept       json
+// @Produce      json
+// @Param        payload  body      PasswordResetRequest  true  "Password reset request payload"
+// @Success      200      {object}  SuccessResponse
+// @Failure      400      {object}  ErrorResponse
+// @Failure      500      {object}  ErrorResponse
+// @Router       /auth/password/reset-request [post]
 func (h *AuthHandler) resetPasswordRequest(c echo.Context) error {
 	var req struct {
 		Email string `json:"email"`
@@ -157,6 +214,17 @@ func (h *AuthHandler) resetPasswordRequest(c echo.Context) error {
 	return c.JSON(http.StatusOK, util.Envelope{"success": true})
 }
 
+// resetPasswordConfirm finalizes a password reset using an OTP.
+// @Summary      Confirm password reset
+// @Description  Set a new password using a reset OTP sent to email.
+// @Tags         Auth
+// @Accept       json
+// @Produce      json
+// @Param        payload  body      PasswordResetConfirmRequest  true  "Password reset confirmation payload"
+// @Success      200      {object}  SuccessResponse
+// @Failure      400      {object}  ErrorResponse
+// @Failure      500      {object}  ErrorResponse
+// @Router       /auth/password/reset-confirm [post]
 func (h *AuthHandler) resetPasswordConfirm(c echo.Context) error {
 	var req struct {
 		Email       string `json:"email"`
@@ -185,6 +253,21 @@ func (h *AuthHandler) resetPasswordConfirm(c echo.Context) error {
 	return c.JSON(http.StatusOK, util.Envelope{"success": true})
 }
 
+// completeProfile updates profile details for the current user.
+// @Summary      Complete profile
+// @Description  Update profile metadata and optionally upload an avatar.
+// @Tags         Auth
+// @Accept       multipart/form-data
+// @Produce      json
+// @Security     BearerAuth
+// @Param        full_name  formData  string  false  "Full name"
+// @Param        username   formData  string  false  "Username"
+// @Param        avatar     formData  file    false  "Avatar image"
+// @Success      200        {object}  AuthUserResponse
+// @Failure      400        {object}  ErrorResponse
+// @Failure      401        {object}  ErrorResponse
+// @Failure      409        {object}  ErrorResponse
+// @Router       /auth/profile [post]
 func (h *AuthHandler) completeProfile(c echo.Context) error {
 	user := c.Get(contextUserKey).(*domain.User)
 
@@ -230,11 +313,30 @@ func (h *AuthHandler) completeProfile(c echo.Context) error {
 	return c.JSON(http.StatusOK, util.Envelope{"user": sanitizeUser(updated)})
 }
 
+// me returns the authenticated user's profile.
+// @Summary      Retrieve profile
+// @Description  Fetch details for the authenticated user.
+// @Tags         Auth
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {object}  AuthUserResponse
+// @Failure      401  {object}  ErrorResponse
+// @Router       /auth/me [get]
 func (h *AuthHandler) me(c echo.Context) error {
 	user := c.Get(contextUserKey).(*domain.User)
 	return c.JSON(http.StatusOK, util.Envelope{"user": sanitizeUser(user)})
 }
 
+// logout invalidates the current session token.
+// @Summary      Logout
+// @Description  Invalidate the current JWT session.
+// @Tags         Auth
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {object}  SuccessResponse
+// @Failure      401  {object}  ErrorResponse
+// @Failure      500  {object}  ErrorResponse
+// @Router       /auth/logout [post]
 func (h *AuthHandler) logout(c echo.Context) error {
 	token := c.Get(contextTokenKey).(string)
 	if err := h.auth.Logout(c.Request().Context(), token); err != nil {
@@ -243,6 +345,19 @@ func (h *AuthHandler) logout(c echo.Context) error {
 	return c.JSON(http.StatusOK, util.Envelope{"success": true})
 }
 
+// listUsers returns a paginated list of users.
+// @Summary      List users
+// @Description  Retrieve a paginated list of users. Limit is capped at 200.
+// @Tags         Auth
+// @Produce      json
+// @Security     BearerAuth
+// @Param        limit   query     int     false  "Number of users to return (max 200)"  maximum(200)
+// @Param        offset  query     int     false  "Offset for pagination"
+// @Success      200     {object}  UsersListResponse
+// @Failure      400     {object}  ErrorResponse
+// @Failure      401     {object}  ErrorResponse
+// @Failure      500     {object}  ErrorResponse
+// @Router       /auth/users [get]
 func (h *AuthHandler) listUsers(c echo.Context) error {
 	limit := 50
 	if raw := c.QueryParam("limit"); raw != "" {
@@ -285,6 +400,20 @@ func (h *AuthHandler) listUsers(c echo.Context) error {
 	})
 }
 
+// deleteUser removes a user account.
+// @Summary      Delete user
+// @Description  Delete a user by ID. Requires an authorized actor with sufficient permissions.
+// @Tags         Auth
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id   path      string  true  "User ID (UUID)"
+// @Success      200  {object}  SuccessResponse
+// @Failure      400  {object}  ErrorResponse
+// @Failure      401  {object}  ErrorResponse
+// @Failure      403  {object}  ErrorResponse
+// @Failure      404  {object}  ErrorResponse
+// @Failure      500  {object}  ErrorResponse
+// @Router       /auth/users/{id} [delete]
 func (h *AuthHandler) deleteUser(c echo.Context) error {
 	actor, ok := c.Get(contextUserKey).(*domain.User)
 	if !ok || actor == nil {
