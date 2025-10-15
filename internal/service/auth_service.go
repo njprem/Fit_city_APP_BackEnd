@@ -198,18 +198,6 @@ func (s *AuthService) LoginWithGoogle(ctx context.Context, idToken string) (*Aut
 		}
 	}
 
-	var existingUser *domain.User
-	if picturePtr != nil {
-		if found, findErr := s.users.FindByEmail(ctx, email); findErr == nil {
-			existingUser = found
-		} else if !isNotFound(findErr) {
-			return nil, findErr
-		}
-		if existingUser != nil && !s.shouldCacheGooglePicture(existingUser.ImageURL, *picturePtr) {
-			picturePtr = nil
-		}
-	}
-
 	user, err := s.users.UpsertGoogleUser(ctx, email, namePtr, picturePtr)
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -589,11 +577,7 @@ func (s *AuthService) shouldCacheGooglePicture(existing *string, pictureURL stri
 	if strings.EqualFold(current, pictureURL) {
 		return true
 	}
-	lowerCurrent := strings.ToLower(current)
-	if strings.Contains(lowerCurrent, "googleusercontent.com") {
-		return true
-	}
-	if strings.Contains(lowerCurrent, "/google/") {
+	if strings.Contains(strings.ToLower(current), "googleusercontent.com") {
 		return true
 	}
 	return false

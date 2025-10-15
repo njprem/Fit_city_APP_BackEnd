@@ -1,4 +1,4 @@
 .gomodcache/
 .gocache/
 .cache/
-*.env
+.env

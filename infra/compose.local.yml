@@ -23,11 +23,8 @@ services:
     build:
       context: ../
       dockerfile: ./infra/docker/api.Dockerfile
-    env_file:
-      - ./env/api.local.env
-
-    depends_on: [db, minio]
-    # depends_on: [db, minio, mailhog]
+    env_file: ../internal/config/env.example
+    depends_on: [db, minio, mailhog]
     ports: ["8080:8080"]
 
 volumes:

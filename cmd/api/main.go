@@ -13,7 +13,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/njprem/Fit_city_APP_BackEnd/docs"
 	"github.com/njprem/Fit_city_APP_BackEnd/internal/config"
 	minioRepo "github.com/njprem/Fit_city_APP_BackEnd/internal/repository/minio"
 	"github.com/njprem/Fit_city_APP_BackEnd/internal/repository/postgres"
@@ -25,11 +24,6 @@ import (
 
 func main() {
 	cfg := config.Load()
-
-	docs.SwaggerInfo.Title = "Fit City API"
-	docs.SwaggerInfo.Description = "API documentation for Fit City backend services."
-	docs.SwaggerInfo.Version = "1.0"
-	docs.SwaggerInfo.BasePath = "/api/v1"
 
 	db, err := postgres.New(cfg.DatabaseURL)
 	if err != nil {
@@ -71,7 +65,6 @@ func main() {
 	router := httpx.NewRouter(cfg.AllowOrigins)
 	httpx.RegisterPages(router, cfg.FrontendBaseURL)
 	httpx.RegisterAuth(router, authService)
-	httpx.RegisterSwagger(router)
 
 	router.Logger.Fatal(router.Start(":" + cfg.Port))
 }
