@@ -1,3 +1,12 @@
+// @title           Fit City API
+// @version         1.0
+// @description     Authentication and profile services for the Fit City platform.
+// @BasePath        /api/v1
+// @schemes         http https
+// @securityDefinitions.apikey BearerAuth
+// @in              header
+// @name            Authorization
+
 package main
 
 import (

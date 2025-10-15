@@ -1,0 +1,520 @@
+basePath: /api/v1
+definitions:
+  http.AuthRole:
+    properties:
+      created_at:
+        example: "2024-01-01T12:00:00Z"
+        type: string
+      description:
+        type: string
+      id:
+        example: f4bb0e02-5f91-4ce0-a6c0-7f63f3a8d5e2
+        type: string
+      role_name:
+        example: admin
+        type: string
+      updated_at:
+        example: "2024-01-01T12:00:00Z"
+        type: string
+    type: object
+  http.AuthTokenResponse:
+    properties:
+      expires_at:
+        example: "2024-01-02T09:30:00Z"
+        type: string
+      token:
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+      user:
+        $ref: '#/definitions/http.AuthUser'
+    type: object
+  http.AuthUser:
+    properties:
+      created_at:
+        example: "2024-01-01T12:00:00Z"
+        type: string
+      email:
+        example: user@example.com
+        type: string
+      full_name:
+        example: Fit City
+        type: string
+      id:
+        example: 9fd13fd2-63c5-4f29-a210-4a1a8e285f74
+        type: string
+      profile_completed:
+        example: true
+        type: boolean
+      role_id:
+        example: 6a4f2f1e-1c7b-4a5e-a938-f1ed9b1fad10
+        type: string
+      role_name:
+        example: member
+        type: string
+      roles:
+        items:
+          $ref: '#/definitions/http.AuthRole'
+        type: array
+      updated_at:
+        example: "2024-01-02T09:30:00Z"
+        type: string
+      user_image_url:
+        example: https://cdn.example.com/avatar.png
+        type: string
+      username:
+        example: fitcityuser
+        type: string
+    type: object
+  http.AuthUserResponse:
+    properties:
+      user:
+        $ref: '#/definitions/http.AuthUser'
+    type: object
+  http.ChangePasswordRequest:
+    properties:
+      current_password:
+        example: OldPass!23
+        type: string
+      new_password:
+        example: NewPass!45
+        type: string
+    type: object
+  http.ErrorResponse:
+    properties:
+      error:
+        example: invalid credentials
+        type: string
+    type: object
+  http.GoogleLoginRequest:
+    properties:
+      id_token:
+        example: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+    type: object
+  http.LoginRequest:
+    properties:
+      email:
+        example: user@example.com
+        type: string
+      password:
+        example: StrongPass!23
+        type: string
+    type: object
+  http.PasswordResetConfirmRequest:
+    properties:
+      email:
+        example: user@example.com
+        type: string
+      new_password:
+        example: NewPass!45
+        type: string
+      otp:
+        example: "123456"
+        type: string
+    type: object
+  http.PasswordResetRequest:
+    properties:
+      email:
+        example: user@example.com
+        type: string
+    type: object
+  http.RegisterRequest:
+    properties:
+      email:
+        example: user@example.com
+        type: string
+      password:
+        example: StrongPass!23
+        type: string
+    type: object
+  http.SuccessResponse:
+    properties:
+      success:
+        example: true
+        type: boolean
+    type: object
+  http.UsersListResponse:
+    properties:
+      meta:
+        $ref: '#/definitions/http.UsersMeta'
+      users:
+        items:
+          $ref: '#/definitions/http.AuthUser'
+        type: array
+    type: object
+  http.UsersMeta:
+    properties:
+      count:
+        example: 2
+        type: integer
+      limit:
+        example: 20
+        type: integer
+      offset:
+        example: 0
+        type: integer
+    type: object
+info:
+  contact: {}
+  description: Authentication and profile services for the Fit City platform.
+  title: Fit City API
+  version: "1.0"
+paths:
+  /auth/google:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate using a Google Sign-In ID token.
+      parameters:
+      - description: Google login payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/http.GoogleLoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.AuthTokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Login with Google
+      tags:
+      - Auth
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate using email/password credentials.
+      parameters:
+      - description: Login payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/http.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.AuthTokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Login with email
+      tags:
+      - Auth
+  /auth/logout:
+    post:
+      description: Invalidate the current JWT session.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Logout
+      tags:
+      - Auth
+  /auth/me:
+    get:
+      description: Fetch details for the authenticated user.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.AuthUserResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve profile
+      tags:
+      - Auth
+  /auth/password:
+    post:
+      consumes:
+      - application/json
+      description: Update the authenticated user's password.
+      parameters:
+      - description: Password change payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/http.ChangePasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Change password
+      tags:
+      - Auth
+  /auth/password/reset-confirm:
+    post:
+      consumes:
+      - application/json
+      description: Set a new password using a reset OTP sent to email.
+      parameters:
+      - description: Password reset confirmation payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/http.PasswordResetConfirmRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Confirm password reset
+      tags:
+      - Auth
+  /auth/password/reset-request:
+    post:
+      consumes:
+      - application/json
+      description: Send a reset OTP to the provided email address.
+      parameters:
+      - description: Password reset request payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/http.PasswordResetRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Request password reset
+      tags:
+      - Auth
+  /auth/profile:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Update profile metadata and optionally upload an avatar.
+      parameters:
+      - description: Full name
+        in: formData
+        name: full_name
+        type: string
+      - description: Username
+        in: formData
+        name: username
+        type: string
+      - description: Avatar image
+        in: formData
+        name: avatar
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.AuthUserResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Complete profile
+      tags:
+      - Auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Create a new Fit City account using an email address and password.
+      parameters:
+      - description: Registration payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/http.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/http.AuthTokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Register with email
+      tags:
+      - Auth
+  /auth/users:
+    get:
+      description: Retrieve a paginated list of users. Limit is capped at 200.
+      parameters:
+      - description: Number of users to return (max 200)
+        in: query
+        maximum: 200
+        name: limit
+        type: integer
+      - description: Offset for pagination
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.UsersListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List users
+      tags:
+      - Auth
+  /auth/users/{id}:
+    delete:
+      description: Delete a user by ID. Requires an authorized actor with sufficient
+        permissions.
+      parameters:
+      - description: User ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete user
+      tags:
+      - Auth
+schemes:
+- http
+- https
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
