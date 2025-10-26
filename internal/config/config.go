@@ -19,7 +19,7 @@ type Config struct {
 	MinIOAccessKey         string
 	MinIOSecretKey         string
 	MinIOUseSSL            bool
-	MinIOBucket            string
+	MinIOBucketProfile     string
 	MinIOPublicURL         string
 	SessionTTL             string
 	FrontendBaseURL        string
@@ -52,7 +52,7 @@ func Load() Config {
 		MinIOAccessKey:         must("MINIO_ACCESS_KEY"),
 		MinIOSecretKey:         must("MINIO_SECRET_KEY"),
 		MinIOUseSSL:            getenv("MINIO_USE_SSL", "false") == "true",
-		MinIOBucket:            must("MINIO_BUCKET"),
+		MinIOBucketProfile:     must("MINIO_BUCKET_PROFILE"),
 		MinIOPublicURL:         getenv("MINIO_PUBLIC_URL", ""),
 		SessionTTL:             getenv("SESSION_TTL", "24h"),
 		FrontendBaseURL:        getenv("FRONTEND_BASE_URL", ""),
