@@ -643,11 +643,11 @@ func TestShouldCacheGooglePicture(t *testing.T) {
 		want     bool
 	}{
 		{name: "nil existing", existing: nil, picture: googleURL, want: true},
-		{name: "blank existing", existing: stringPtr("  "), picture: googleURL, want: true},
-		{name: "same url", existing: stringPtr(googleURL), picture: googleURL, want: true},
-		{name: "google domain", existing: stringPtr(googleURL + "?sz=64"), picture: "https://photos.googleusercontent.com/avatar2", want: true},
-		{name: "different domain", existing: stringPtr(otherURL), picture: googleURL, want: false},
-		{name: "empty picture", existing: stringPtr(otherURL), picture: "  ", want: false},
+		{name: "blank existing", existing: authStringPtr("  "), picture: googleURL, want: true},
+		{name: "same url", existing: authStringPtr(googleURL), picture: googleURL, want: true},
+		{name: "google domain", existing: authStringPtr(googleURL + "?sz=64"), picture: "https://photos.googleusercontent.com/avatar2", want: true},
+		{name: "different domain", existing: authStringPtr(otherURL), picture: googleURL, want: false},
+		{name: "empty picture", existing: authStringPtr(otherURL), picture: "  ", want: false},
 	}
 
 	for _, tc := range tests {
@@ -785,7 +785,7 @@ func TestConfirmPasswordReset(t *testing.T) {
 func TestCompleteProfileUploadAndNormalize(t *testing.T) {
 	userID := uuid.New()
 	storage := &fakeStorage{url: "https://cdn.example.com/profiles/avatar.png"}
-	updatedUser := &domain.User{ID: userID, Username: stringPtr("trimmed"), FullName: stringPtr("Trimmed"), ImageURL: stringPtr("https://cdn.example.com/profiles/avatar.png"), ProfileCompleted: true}
+	updatedUser := &domain.User{ID: userID, Username: authStringPtr("trimmed"), FullName: authStringPtr("Trimmed"), ImageURL: authStringPtr("https://cdn.example.com/profiles/avatar.png"), ProfileCompleted: true}
 	userRepo := &fakeUserRepo{updateProfileResult: updatedUser}
 	svc := newAuthServiceForTests(userRepo, &fakeRoleRepo{}, &fakeSessionRepo{}, storage, nil, nil)
 
@@ -987,6 +987,6 @@ func TestDeleteUser(t *testing.T) {
 	})
 }
 
-func stringPtr(v string) *string {
+func authStringPtr(v string) *string {
 	return &v
 }

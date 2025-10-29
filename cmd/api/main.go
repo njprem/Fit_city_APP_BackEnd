@@ -11,6 +11,7 @@ package main
 
 import (
 	"log"
+	"strings"
 	"time"
 
 	"github.com/njprem/Fit_city_APP_BackEnd/internal/config"
@@ -62,9 +63,42 @@ func main() {
 
 	authService := service.NewAuthService(userRepo, roleRepo, sessionRepo, passwordResetRepo, objectStorage, resetMailer, jwtManager, cfg.GoogleAudience, cfg.MinIOBucketProfile, resetTTL, cfg.PasswordResetOTPLength)
 
+	destinationRepo := postgres.NewDestinationRepo(db)
+	destinationChangeRepo := postgres.NewDestinationChangeRepo(db)
+	destinationVersionRepo := postgres.NewDestinationVersionRepo(db)
+
+	destinationPublicBase := cfg.MinIOPublicURL
+	if destinationPublicBase != "" && cfg.MinIOBucketProfile != "" {
+		destinationPublicBase = strings.Replace(destinationPublicBase, cfg.MinIOBucketProfile, cfg.MinIOBucketDestinations, 1)
+	}
+
+	workflowService := service.NewDestinationWorkflowService(
+		destinationRepo,
+		destinationChangeRepo,
+		destinationVersionRepo,
+		objectStorage,
+		service.DestinationWorkflowConfig{
+			Bucket:            cfg.MinIOBucketDestinations,
+			PublicBaseURL:     destinationPublicBase,
+			ImageMaxBytes:     cfg.DestinationImageMaxBytes,
+			AllowedCategories: cfg.DestinationAllowedCategories,
+			ApprovalRequired:  cfg.DestinationApprovalRequired,
+			HardDeleteAllowed: cfg.DestinationHardDeleteAllowed,
+		},
+	)
+
+	destinationService := service.NewDestinationService(destinationRepo)
+
 	router := httpx.NewRouter(cfg.AllowOrigins)
 	httpx.RegisterPages(router, cfg.FrontendBaseURL)
 	httpx.RegisterAuth(router, authService)
+	httpx.RegisterDestinations(router, authService, destinationService, workflowService, httpx.DestinationFeatures{
+		View:   cfg.EnableDestinationView,
+		Create: cfg.EnableDestinationCreate,
+		Update: cfg.EnableDestinationUpdate,
+		Delete: cfg.EnableDestinationDelete,
+	})
+	httpx.RegisterSwagger(router)
 
 	router.Logger.Fatal(router.Start(":" + cfg.Port))
 }

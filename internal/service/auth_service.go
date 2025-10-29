@@ -523,6 +523,17 @@ func (s *AuthService) DeleteUser(ctx context.Context, actor *domain.User, target
 	return nil
 }
 
+func (s *AuthService) IsAdmin(ctx context.Context, user *domain.User) (bool, error) {
+	if user == nil {
+		return false, ErrForbidden
+	}
+	adminRole, err := s.roles.GetOrCreateRole(ctx, s.adminRoleName, "Administrator role with elevated permissions")
+	if err != nil {
+		return false, err
+	}
+	return user.HasRole(adminRole.ID), nil
+}
+
 func (s *AuthService) issueSession(ctx context.Context, user *domain.User) (*AuthResult, error) {
 	token, expiresAt, err := s.jwt.Generate(user.ID, user.Email, user.Username, user.ProfileCompleted)
 	if err != nil {
