@@ -737,6 +737,10 @@ paths:
         in: query
         name: offset
         type: integer
+      - description: Case-insensitive partial match against name, slug, city, country, category, or description
+        in: query
+        name: query
+        type: string
       produces:
       - application/json
       responses:

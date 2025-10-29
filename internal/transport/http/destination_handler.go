@@ -350,7 +350,8 @@ func (h *DestinationHandler) listPublished(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, util.Error("resource not found"))
 	}
 	limit, offset := parsePagination(c, 20, 0)
-	destinations, err := h.destinations.ListPublished(c.Request().Context(), limit, offset)
+	query := strings.TrimSpace(c.QueryParam("query"))
+	destinations, err := h.destinations.ListPublished(c.Request().Context(), limit, offset, query)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, util.Error("unable to list destinations"))
 	}

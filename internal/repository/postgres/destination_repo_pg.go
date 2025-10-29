@@ -215,17 +215,41 @@ func (r *DestinationRepository) FindBySlug(ctx context.Context, slug string) (*d
 	return &dest, nil
 }
 
-func (r *DestinationRepository) ListPublished(ctx context.Context, limit, offset int) ([]domain.Destination, error) {
-	const query = `
+func (r *DestinationRepository) ListPublished(ctx context.Context, limit, offset int, query string) ([]domain.Destination, error) {
+	const base = `
 		SELECT id, name, slug, status, version, city, country, category, description,
 		       latitude, longitude, hero_image_url, created_at, updated_at, updated_by, deleted_at
 		FROM travel_destination
 		WHERE status = 'published' AND deleted_at IS NULL
-		ORDER BY updated_at DESC
-		LIMIT $1 OFFSET $2
 	`
+	params := make([]any, 0, 3)
+	var builder strings.Builder
+	builder.WriteString(base)
+
+	if trimmed := strings.TrimSpace(query); trimmed != "" {
+		searchPattern := "%" + trimmed + "%"
+		placeholder := fmt.Sprintf("$%d", len(params)+1)
+		builder.WriteString(`
+		AND (
+			name ILIKE ` + placeholder + `
+			OR city ILIKE ` + placeholder + `
+			OR country ILIKE ` + placeholder + `
+			OR category ILIKE ` + placeholder + `
+			OR description ILIKE ` + placeholder + `
+		)`)
+		params = append(params, searchPattern)
+	}
+
+	limitPlaceholder := fmt.Sprintf("$%d", len(params)+1)
+	offsetPlaceholder := fmt.Sprintf("$%d", len(params)+2)
+	builder.WriteString(`
+		ORDER BY updated_at DESC
+		LIMIT ` + limitPlaceholder + ` OFFSET ` + offsetPlaceholder + `
+	`)
+	params = append(params, limit, offset)
+
 	destinations := make([]domain.Destination, 0)
-	if err := r.db.SelectContext(ctx, &destinations, query, limit, offset); err != nil {
+	if err := r.db.SelectContext(ctx, &destinations, builder.String(), params...); err != nil {
 		return nil, err
 	}
 	return destinations, nil

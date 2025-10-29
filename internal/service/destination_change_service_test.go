@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"io"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -477,12 +478,16 @@ func (m *memoryDestinationRepo) FindBySlug(ctx context.Context, slug string) (*d
 	return nil, sql.ErrNoRows
 }
 
-func (m *memoryDestinationRepo) ListPublished(ctx context.Context, limit, offset int) ([]domain.Destination, error) {
+func (m *memoryDestinationRepo) ListPublished(ctx context.Context, limit, offset int, query string) ([]domain.Destination, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	published := make([]domain.Destination, 0)
+	needle := strings.ToLower(strings.TrimSpace(query))
 	for _, dest := range m.store {
 		if dest.Status == domain.DestinationStatusPublished && dest.DeletedAt == nil {
+			if needle != "" && !destinationMatchesQuery(dest, needle) {
+				continue
+			}
 			published = append(published, *cloneDestination(dest))
 		}
 	}
@@ -494,6 +499,36 @@ func (m *memoryDestinationRepo) ListPublished(ctx context.Context, limit, offset
 		end = offset + limit
 	}
 	return published[offset:end], nil
+}
+
+func destinationMatchesQuery(dest *domain.Destination, needle string) bool {
+	if dest == nil {
+		return false
+	}
+	fields := []string{
+		dest.Name,
+	}
+	if dest.Slug != nil {
+		fields = append(fields, *dest.Slug)
+	}
+	if dest.City != nil {
+		fields = append(fields, *dest.City)
+	}
+	if dest.Country != nil {
+		fields = append(fields, *dest.Country)
+	}
+	if dest.Category != nil {
+		fields = append(fields, *dest.Category)
+	}
+	if dest.Description != nil {
+		fields = append(fields, *dest.Description)
+	}
+	for _, field := range fields {
+		if strings.Contains(strings.ToLower(field), needle) {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *memoryDestinationRepo) mustCreate(ctx context.Context, fields domain.DestinationChangeFields, createdBy uuid.UUID, status domain.DestinationStatus, heroImageURL *string) *domain.Destination {

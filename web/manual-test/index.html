@@ -339,6 +339,7 @@
           <textarea id="mgmtAuthorToken" placeholder="Author JWT"></textarea>
           <label for="mgmtReviewerToken">Reviewer token</label>
           <textarea id="mgmtReviewerToken" placeholder="Reviewer JWT"></textarea>
+          <button id="mgmtSwapTokens" type="button">Swap author & reviewer tokens</button>
           <div class="muted">Reviewer token is stored in localStorage as <code>fitcity_reviewer_token</code>.</div>
         </section>
 
@@ -426,6 +427,8 @@
         <section>
           <h2>Published Destinations</h2>
           <p class="muted">Calls <code>/api/v1/destinations</code>. All users can access this endpoint.</p>
+          <label for="mgmtListPublishedQuery">Search query (optional)</label>
+          <input id="mgmtListPublishedQuery" type="text" placeholder="e.g. central" />
           <button id="mgmtListPublished">List published destinations</button>
           <pre id="mgmtListPublishedResult"></pre>
         </section>
@@ -525,6 +528,23 @@
           localStorage.removeItem('fitcity_reviewer_token');
         }
       });
+      const swapButton = $('mgmtSwapTokens');
+      if (swapButton) {
+        swapButton.addEventListener('click', () => {
+          const authorValue = (managementUI.authorToken && managementUI.authorToken.value) || '';
+          const reviewerValue = managementUI.reviewerToken.value || '';
+          if (managementUI.authorToken) {
+            managementUI.authorToken.value = reviewerValue;
+          }
+          managementUI.reviewerToken.value = authorValue;
+          managementState.reviewerToken = authorValue.trim();
+          if (managementState.reviewerToken) {
+            localStorage.setItem('fitcity_reviewer_token', managementState.reviewerToken);
+          } else {
+            localStorage.removeItem('fitcity_reviewer_token');
+          }
+        });
+      }
     }
 
     if (managementUI.createFields && !managementUI.createFields.value.trim()) {
@@ -1203,7 +1223,13 @@
     });
 
     attachClick('mgmtListPublished', async () => {
-      const result = await request('/api/v1/destinations');
+      const queryValue = $('mgmtListPublishedQuery') ? $('mgmtListPublishedQuery').value.trim() : '';
+      const params = new URLSearchParams();
+      if (queryValue) {
+        params.set('query', queryValue);
+      }
+      const url = params.toString() ? `/api/v1/destinations?${params.toString()}` : '/api/v1/destinations';
+      const result = await request(url);
       if ($('mgmtListPublishedResult')) {
         $('mgmtListPublishedResult').textContent = pretty(result);
       }

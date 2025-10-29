@@ -94,7 +94,7 @@ Admin Destination Management introduces a governed content workflow that lets au
 
 ### 6.6 Public Destination View
 1. Public user (or admin preview) calls `GET /api/v1/destinations` or `/api/v1/destinations/{slug}`.
-2. `DestinationService.ListPublished` fetches only `status='published'` rows.
+2. `DestinationService.ListPublished` fetches only `status='published'` rows, optionally filtered by a case-insensitive query string.
 3. Response includes sanitized fields, hero image URL, and version number for client caching.
 
 ### 6.7 Alternate & Error Flows
