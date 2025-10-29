@@ -154,6 +154,222 @@ definitions:
         example: 0
         type: integer
     type: object
+  http.PageMeta:
+    properties:
+      count:
+        example: 1
+        type: integer
+      limit:
+        example: 20
+        type: integer
+      offset:
+        example: 0
+        type: integer
+    type: object
+  http.Destination:
+    properties:
+      category:
+        example: Nature
+        type: string
+      city:
+        example: New York
+        type: string
+      country:
+        example: USA
+        type: string
+      created_at:
+        example: "2024-07-10T12:00:00Z"
+        type: string
+      deleted_at:
+        type: string
+      description:
+        example: Iconic urban park spanning 843 acres.
+        type: string
+      hero_image_url:
+        example: https://cdn.fitcity/destinations/central-park.jpg
+        type: string
+      id:
+        example: 1da5f07d-7dcf-4aea-b948-7c9daa0a5db7
+        type: string
+      latitude:
+        example: 40.785091
+        format: double
+        type: number
+      longitude:
+        example: -73.968285
+        format: double
+        type: number
+      name:
+        example: Central Park
+        type: string
+      slug:
+        example: central-park
+        type: string
+      status:
+        enum:
+        - draft
+        - published
+        - archived
+        type: string
+      updated_at:
+        example: "2024-07-11T08:00:00Z"
+        type: string
+      updated_by:
+        example: 9fd13fd2-63c5-4f29-a210-4a1a8e285f74
+        type: string
+      version:
+        example: 3
+        type: integer
+    type: object
+  http.DestinationListResponse:
+    properties:
+      destinations:
+        items:
+          $ref: '#/definitions/http.Destination'
+        type: array
+      meta:
+        $ref: '#/definitions/http.PageMeta'
+    type: object
+  http.DestinationResponse:
+    properties:
+      destination:
+        $ref: '#/definitions/http.Destination'
+    type: object
+  http.DestinationChangeFields:
+    properties:
+      category:
+        type: string
+      city:
+        type: string
+      country:
+        type: string
+      description:
+        type: string
+      hard_delete:
+        type: boolean
+      hero_image_upload_id:
+        type: string
+      hero_image_url:
+        type: string
+      latitude:
+        format: double
+        type: number
+      longitude:
+        format: double
+        type: number
+      name:
+        type: string
+      slug:
+        type: string
+      status:
+        enum:
+        - draft
+        - published
+        - archived
+        type: string
+    type: object
+  http.DestinationChange:
+    properties:
+      action:
+        enum:
+        - create
+        - update
+        - delete
+        type: string
+      created_at:
+        example: "2024-07-10T12:00:00Z"
+        type: string
+      destination_id:
+        type: string
+      draft_version:
+        example: 2
+        type: integer
+      fields:
+        $ref: '#/definitions/http.DestinationChangeFields'
+      hero_image_temp_key:
+        type: string
+      id:
+        example: 3c7f3af4-6d0b-4933-b3e8-5e56b6f07080
+        type: string
+      published_version:
+        example: 6
+        type: integer
+      review_message:
+        type: string
+      reviewed_at:
+        type: string
+      reviewed_by:
+        type: string
+      status:
+        enum:
+        - draft
+        - pending_review
+        - approved
+        - rejected
+        type: string
+      submitted_at:
+        type: string
+      submitted_by:
+        type: string
+      updated_at:
+        example: "2024-07-11T08:00:00Z"
+        type: string
+    type: object
+  http.DestinationChangeResponse:
+    properties:
+      change_request:
+        $ref: '#/definitions/http.DestinationChange'
+    type: object
+  http.DestinationChangeListResponse:
+    properties:
+      changes:
+        items:
+          $ref: '#/definitions/http.DestinationChange'
+        type: array
+      meta:
+        $ref: '#/definitions/http.PageMeta'
+    type: object
+  http.DestinationDraftRequest:
+    properties:
+      action:
+        enum:
+        - create
+        - update
+        - delete
+        type: string
+      destination_id:
+        type: string
+      fields:
+        $ref: '#/definitions/http.DestinationChangeFields'
+    required:
+    - action
+    type: object
+  http.DestinationUpdateRequest:
+    properties:
+      draft_version:
+        example: 2
+        type: integer
+      fields:
+        $ref: '#/definitions/http.DestinationChangeFields'
+    required:
+    - draft_version
+    type: object
+  http.DestinationRejectRequest:
+    properties:
+      message:
+        example: Please provide updated pricing details.
+        type: string
+    type: object
+  http.DestinationApproveResponse:
+    properties:
+      change_request:
+        $ref: '#/definitions/http.DestinationChange'
+      destination:
+        $ref: '#/definitions/http.Destination'
+      message:
+        example: Destination updated successfully
+        type: string
+    type: object
 info:
   contact: {}
   description: Authentication and profile services for the Fit City platform.
@@ -509,6 +725,291 @@ paths:
       summary: Delete user
       tags:
       - Auth
+  /destinations:
+    get:
+      description: List published destinations visible to end users.
+      parameters:
+      - description: Maximum number of records to return
+        in: query
+        name: limit
+        type: integer
+      - description: Number of records to skip
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.DestinationListResponse'
+      summary: List published destinations
+      tags:
+      - Destinations
+  /destinations/{id}:
+    get:
+      description: Retrieve a published destination by UUID or slug.
+      parameters:
+      - description: Destination UUID or slug
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.DestinationResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Get published destination
+      tags:
+      - Destinations
+  /admin/destination-changes:
+    get:
+      description: List destination change requests filtered by status or destination.
+      parameters:
+      - description: Filter by status (draft,pending_review,approved,rejected)
+        in: query
+        name: status
+        type: string
+      - description: Destination UUID to filter by
+        in: query
+        name: destination_id
+        type: string
+      - description: Maximum number of records to return
+        in: query
+        name: limit
+        type: integer
+      - description: Number of records to skip
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.DestinationChangeListResponse'
+      security:
+      - BearerAuth: []
+      summary: List destination change requests
+      tags:
+      - Admin Destinations
+    post:
+      consumes:
+      - application/json
+      description: Create a new destination change draft for create, update, or delete actions.
+      parameters:
+      - in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/http.DestinationDraftRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/http.DestinationChangeResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create destination change draft
+      tags:
+      - Admin Destinations
+  /admin/destination-changes/{id}:
+    get:
+      description: Get a destination change request by identifier.
+      parameters:
+      - description: Change request UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.DestinationChangeResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get destination change request
+      tags:
+      - Admin Destinations
+    put:
+      consumes:
+      - application/json
+      description: Update fields on an existing draft change request.
+      parameters:
+      - description: Change request UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/http.DestinationUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.DestinationChangeResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update destination change draft
+      tags:
+      - Admin Destinations
+  /admin/destination-changes/{id}/submit:
+    post:
+      description: Submit a draft change request for review.
+      parameters:
+      - description: Change request UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/http.DestinationChangeResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Submit destination change for review
+      tags:
+      - Admin Destinations
+  /admin/destination-changes/{id}/approve:
+    post:
+      description: Approve a pending change request and apply it to the destination catalog.
+      parameters:
+      - description: Change request UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.DestinationApproveResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Approve destination change request
+      tags:
+      - Admin Destinations
+  /admin/destination-changes/{id}/reject:
+    post:
+      consumes:
+      - application/json
+      description: Reject a pending change request with reviewer feedback.
+      parameters:
+      - description: Change request UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/http.DestinationRejectRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.DestinationChangeResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Reject destination change request
+      tags:
+      - Admin Destinations
+  /admin/destination-changes/{id}/hero-image:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload or replace the hero image for a change request draft.
+      parameters:
+      - description: Change request UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Image file to upload
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.DestinationChangeResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Upload hero image for change request
+      tags:
+      - Admin Destinations
 schemes:
 - http
 - https
