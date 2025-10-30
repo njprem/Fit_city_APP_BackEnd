@@ -49,6 +49,27 @@ pipeline {
             '''
           }
         }
+        stage('Setup MinIO Buckets') {
+          steps {
+            sh '''#!/bin/bash
+              set -euo pipefail
+              if [[ -f infra/env/api.prod.env ]]; then
+                while IFS='=' read -r key value; do
+                  [[ -z "$key" || "${key:0:1}" == "#" ]] && continue
+                  # remove optional surrounding quotes
+                  value="${value%\"}"
+                  value="${value#\"}"
+                  value="${value%\'}"
+                  value="${value#\'}"
+                  if [[ -z "${!key:-}" ]]; then
+                    export "$key"="$value"
+                  fi
+                done < infra/env/api.prod.env
+              fi
+              scripts/setup_minio_buckets.sh
+            '''
+          }
+        }
         stage('Docker Compose Up') {
             steps {
                 sh '''
