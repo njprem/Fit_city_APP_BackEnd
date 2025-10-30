@@ -505,11 +505,23 @@ func buildDestinationResponse(dest *domain.Destination) util.Envelope {
 	if dest.Description != nil {
 		resp["description"] = *dest.Description
 	}
+	if dest.Contact != nil {
+		resp["contact"] = *dest.Contact
+	}
+	if dest.OpeningTime != nil {
+		resp["opening_time"] = *dest.OpeningTime
+	}
+	if dest.ClosingTime != nil {
+		resp["closing_time"] = *dest.ClosingTime
+	}
 	if dest.Latitude != nil {
 		resp["latitude"] = *dest.Latitude
 	}
 	if dest.Longitude != nil {
 		resp["longitude"] = *dest.Longitude
+	}
+	if len(dest.Gallery) > 0 {
+		resp["gallery"] = dest.Gallery
 	}
 	if dest.HeroImage != nil {
 		resp["hero_image_url"] = *dest.HeroImage
@@ -581,11 +593,23 @@ func buildChangeFields(fields domain.DestinationChangeFields) util.Envelope {
 	if fields.Description != nil {
 		resp["description"] = *fields.Description
 	}
+	if fields.Contact != nil {
+		resp["contact"] = *fields.Contact
+	}
+	if fields.OpeningTime != nil {
+		resp["opening_time"] = *fields.OpeningTime
+	}
+	if fields.ClosingTime != nil {
+		resp["closing_time"] = *fields.ClosingTime
+	}
 	if fields.Latitude != nil {
 		resp["latitude"] = *fields.Latitude
 	}
 	if fields.Longitude != nil {
 		resp["longitude"] = *fields.Longitude
+	}
+	if fields.Gallery != nil {
+		resp["gallery"] = *fields.Gallery
 	}
 	if fields.Status != nil {
 		resp["status"] = *fields.Status

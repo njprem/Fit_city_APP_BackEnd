@@ -383,6 +383,9 @@ func (s *DestinationWorkflowService) validateFields(action domain.DestinationCha
 	fields.Country = trim(fields.Country)
 	fields.Category = trim(fields.Category)
 	fields.Slug = trim(fields.Slug)
+	fields.Contact = trim(fields.Contact)
+	fields.OpeningTime = trim(fields.OpeningTime)
+	fields.ClosingTime = trim(fields.ClosingTime)
 
 	if requireAll || fields.Name != nil {
 		if fields.Name == nil || *fields.Name == "" {
@@ -410,6 +413,38 @@ func (s *DestinationWorkflowService) validateFields(action domain.DestinationCha
 	if fields.Longitude != nil {
 		if lng := *fields.Longitude; lng < -180 || lng > 180 {
 			problems = append(problems, "longitude must be between -180 and 180")
+		}
+	}
+
+	validateTime := func(label string, raw *string) {
+		if raw == nil || *raw == "" {
+			return
+		}
+		if _, err := time.Parse("15:04", *raw); err != nil {
+			problems = append(problems, fmt.Sprintf("%s must be in HH:MM (24h) format", label))
+		}
+	}
+
+	validateTime("opening_time", fields.OpeningTime)
+	validateTime("closing_time", fields.ClosingTime)
+
+	if fields.Gallery != nil {
+		gallery := *fields.Gallery
+		for idx := range gallery {
+			gallery[idx].URL = strings.TrimSpace(gallery[idx].URL)
+			if gallery[idx].Caption != nil {
+				if trimmed := strings.TrimSpace(*gallery[idx].Caption); trimmed == "" {
+					gallery[idx].Caption = nil
+				} else {
+					gallery[idx].Caption = &trimmed
+				}
+			}
+			if gallery[idx].URL == "" {
+				problems = append(problems, fmt.Sprintf("gallery[%d] url is required", idx))
+			}
+			if gallery[idx].Ordering < 0 {
+				problems = append(problems, fmt.Sprintf("gallery[%d] ordering must be non-negative", idx))
+			}
 		}
 	}
 
@@ -553,9 +588,18 @@ func snapshotFromDestination(dest *domain.Destination) domain.DestinationSnapsho
 		Description: dest.Description,
 		Latitude:    dest.Latitude,
 		Longitude:   dest.Longitude,
-		HeroImage:   dest.HeroImage,
-		UpdatedAt:   dest.UpdatedAt,
-		UpdatedBy:   dest.UpdatedBy,
+		Contact:     dest.Contact,
+		OpeningTime: dest.OpeningTime,
+		ClosingTime: dest.ClosingTime,
+		Gallery: func() domain.DestinationGallery {
+			if len(dest.Gallery) == 0 {
+				return nil
+			}
+			return append(domain.DestinationGallery(nil), dest.Gallery...)
+		}(),
+		HeroImage: dest.HeroImage,
+		UpdatedAt: dest.UpdatedAt,
+		UpdatedBy: dest.UpdatedBy,
 	}
 }
 

@@ -185,6 +185,19 @@ definitions:
       description:
         example: Iconic urban park spanning 843 acres.
         type: string
+      contact:
+        example: +1-212-310-6600
+        type: string
+      opening_time:
+        example: "08:00"
+        type: string
+      closing_time:
+        example: "22:00"
+        type: string
+      gallery:
+        items:
+          $ref: '#/definitions/http.DestinationMedia'
+        type: array
       hero_image_url:
         example: https://cdn.fitcity/destinations/central-park.jpg
         type: string
@@ -245,6 +258,16 @@ definitions:
         type: string
       description:
         type: string
+      contact:
+        type: string
+      opening_time:
+        type: string
+      closing_time:
+        type: string
+      gallery:
+        items:
+          $ref: '#/definitions/http.DestinationMedia'
+        type: array
       hard_delete:
         type: boolean
       hero_image_upload_id:
@@ -267,6 +290,20 @@ definitions:
         - published
         - archived
         type: string
+    type: object
+  http.DestinationMedia:
+    properties:
+      url:
+        example: https://cdn.fitcity/destinations/central-park/gallery-1.jpg
+        type: string
+      caption:
+        example: Summer blooms near the lake
+        type: string
+      ordering:
+        example: 1
+        type: integer
+    required:
+    - url
     type: object
   http.DestinationChange:
     properties:

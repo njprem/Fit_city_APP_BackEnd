@@ -28,19 +28,23 @@ const (
 )
 
 type DestinationChangeFields struct {
-	Name               *string            `json:"name,omitempty"`
-	Slug               *string            `json:"slug,omitempty"`
-	City               *string            `json:"city,omitempty"`
-	Country            *string            `json:"country,omitempty"`
-	Category           *string            `json:"category,omitempty"`
-	Description        *string            `json:"description,omitempty"`
-	Latitude           *float64           `json:"latitude,omitempty"`
-	Longitude          *float64           `json:"longitude,omitempty"`
-	Status             *DestinationStatus `json:"status,omitempty"`
-	HeroImageUploadID  *string            `json:"hero_image_upload_id,omitempty"`
-	HeroImageURL       *string            `json:"hero_image_url,omitempty"`
-	PublishedHeroImage *string            `json:"published_hero_image,omitempty"`
-	HardDelete         *bool              `json:"hard_delete,omitempty"`
+	Name               *string             `json:"name,omitempty"`
+	Slug               *string             `json:"slug,omitempty"`
+	City               *string             `json:"city,omitempty"`
+	Country            *string             `json:"country,omitempty"`
+	Category           *string             `json:"category,omitempty"`
+	Description        *string             `json:"description,omitempty"`
+	Latitude           *float64            `json:"latitude,omitempty"`
+	Longitude          *float64            `json:"longitude,omitempty"`
+	Contact            *string             `json:"contact,omitempty"`
+	OpeningTime        *string             `json:"opening_time,omitempty"`
+	ClosingTime        *string             `json:"closing_time,omitempty"`
+	Gallery            *DestinationGallery `json:"gallery,omitempty"`
+	Status             *DestinationStatus  `json:"status,omitempty"`
+	HeroImageUploadID  *string             `json:"hero_image_upload_id,omitempty"`
+	HeroImageURL       *string             `json:"hero_image_url,omitempty"`
+	PublishedHeroImage *string             `json:"published_hero_image,omitempty"`
+	HardDelete         *bool               `json:"hard_delete,omitempty"`
 }
 
 func (f DestinationChangeFields) Value() (driver.Value, error) {
@@ -98,20 +102,24 @@ type DestinationChangeFilter struct {
 }
 
 type DestinationSnapshot struct {
-	ID          uuid.UUID         `json:"id"`
-	Name        string            `json:"name"`
-	Slug        *string           `json:"slug,omitempty"`
-	Status      DestinationStatus `json:"status"`
-	Version     int64             `json:"version"`
-	City        *string           `json:"city,omitempty"`
-	Country     *string           `json:"country,omitempty"`
-	Category    *string           `json:"category,omitempty"`
-	Description *string           `json:"description,omitempty"`
-	Latitude    *float64          `json:"latitude,omitempty"`
-	Longitude   *float64          `json:"longitude,omitempty"`
-	HeroImage   *string           `json:"hero_image_url,omitempty"`
-	UpdatedAt   time.Time         `json:"updated_at"`
-	UpdatedBy   *uuid.UUID        `json:"updated_by,omitempty"`
+	ID          uuid.UUID          `json:"id"`
+	Name        string             `json:"name"`
+	Slug        *string            `json:"slug,omitempty"`
+	Status      DestinationStatus  `json:"status"`
+	Version     int64              `json:"version"`
+	City        *string            `json:"city,omitempty"`
+	Country     *string            `json:"country,omitempty"`
+	Category    *string            `json:"category,omitempty"`
+	Description *string            `json:"description,omitempty"`
+	Latitude    *float64           `json:"latitude,omitempty"`
+	Longitude   *float64           `json:"longitude,omitempty"`
+	Contact     *string            `json:"contact,omitempty"`
+	OpeningTime *string            `json:"opening_time,omitempty"`
+	ClosingTime *string            `json:"closing_time,omitempty"`
+	Gallery     DestinationGallery `json:"gallery,omitempty"`
+	HeroImage   *string            `json:"hero_image_url,omitempty"`
+	UpdatedAt   time.Time          `json:"updated_at"`
+	UpdatedBy   *uuid.UUID         `json:"updated_by,omitempty"`
 }
 
 func (s DestinationSnapshot) Value() (driver.Value, error) {

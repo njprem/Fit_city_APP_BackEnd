@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"io"
 	"strings"
 	"sync"
@@ -320,6 +321,114 @@ func TestDestinationWorkflowService_Flows(t *testing.T) {
 			t.Fatalf("draft destination should remain draft after rejection")
 		}
 	})
+
+	t.Run("create destination persists contact hours and gallery", func(t *testing.T) {
+		gallery := domain.DestinationGallery{
+			{
+				URL:      "https://cdn.fitcity.local/destinations/gallery-1.jpg",
+				Ordering: 1,
+			},
+			{
+				URL:      "https://cdn.fitcity.local/destinations/gallery-2.jpg",
+				Ordering: 2,
+				Caption:  strPtr("Evening skyline"),
+			},
+		}
+		contact := strPtr("+1-555-123-4567")
+		opening := strPtr("08:00")
+		closing := strPtr("21:30")
+
+		change, err := service.CreateDraft(ctx, admin, DestinationDraftInput{
+			Action: domain.DestinationChangeActionCreate,
+			Fields: domain.DestinationChangeFields{
+				Name:        strPtr("Gallery Gardens"),
+				Category:    strPtr("Nature"),
+				Description: strPtr("Features vibrant exhibits"),
+				Contact:     contact,
+				OpeningTime: opening,
+				ClosingTime: closing,
+				Gallery:     &gallery,
+			},
+		})
+		if err != nil {
+			t.Fatalf("CreateDraft: %v", err)
+		}
+		if _, err = service.SubmitDraft(ctx, change.ID, admin); err != nil {
+			t.Fatalf("SubmitDraft: %v", err)
+		}
+		_, dest, err := service.Approve(ctx, change.ID, reviewer)
+		if err != nil {
+			t.Fatalf("Approve: %v", err)
+		}
+		if dest.Contact == nil || *dest.Contact != *contact {
+			t.Fatalf("expected contact to persist")
+		}
+		if dest.OpeningTime == nil || *dest.OpeningTime != *opening {
+			t.Fatalf("expected opening time to persist")
+		}
+		if dest.ClosingTime == nil || *dest.ClosingTime != *closing {
+			t.Fatalf("expected closing time to persist")
+		}
+		if len(dest.Gallery) != len(gallery) {
+			t.Fatalf("expected %d gallery items, got %d", len(gallery), len(dest.Gallery))
+		}
+		for i := range gallery {
+			if dest.Gallery[i].URL != gallery[i].URL {
+				t.Fatalf("gallery url mismatch at index %d", i)
+			}
+			if gallery[i].Caption == nil {
+				if dest.Gallery[i].Caption != nil {
+					t.Fatalf("expected nil caption at index %d", i)
+				}
+			} else if dest.Gallery[i].Caption == nil || *dest.Gallery[i].Caption != *gallery[i].Caption {
+				t.Fatalf("gallery caption mismatch at index %d", i)
+			}
+			if dest.Gallery[i].Ordering != gallery[i].Ordering {
+				t.Fatalf("gallery ordering mismatch at index %d", i)
+			}
+		}
+	})
+
+	t.Run("create draft rejects invalid opening hours", func(t *testing.T) {
+		_, err := service.CreateDraft(ctx, admin, DestinationDraftInput{
+			Action: domain.DestinationChangeActionCreate,
+			Fields: domain.DestinationChangeFields{
+				Name:        strPtr("Late Night Market"),
+				Category:    strPtr("Food"),
+				Description: strPtr("Nightly specials"),
+				OpeningTime: strPtr("25:00"),
+			},
+		})
+		if err == nil {
+			t.Fatalf("expected validation error for invalid opening time")
+		}
+		if !errors.Is(err, ErrDestinationChangeValidation) {
+			t.Fatalf("expected ErrDestinationChangeValidation, got %v", err)
+		}
+	})
+
+	t.Run("create draft rejects gallery item without url", func(t *testing.T) {
+		gallery := domain.DestinationGallery{
+			{
+				URL:      " ",
+				Ordering: 1,
+			},
+		}
+		_, err := service.CreateDraft(ctx, admin, DestinationDraftInput{
+			Action: domain.DestinationChangeActionCreate,
+			Fields: domain.DestinationChangeFields{
+				Name:     strPtr("Gallery Missing URL"),
+				Category: strPtr("Nature"),
+				Gallery:  &gallery,
+			},
+		})
+		if err == nil {
+			t.Fatalf("expected validation error for gallery without url")
+		}
+		if !errors.Is(err, ErrDestinationChangeValidation) {
+			t.Fatalf("expected ErrDestinationChangeValidation, got %v", err)
+		}
+	})
 }
 
 // --- memory repositories for testing ---
@@ -359,6 +468,10 @@ func (m *memoryDestinationRepo) Create(ctx context.Context, fields domain.Destin
 		Description: copyStringPtr(fields.Description),
 		Latitude:    copyFloatPtr(fields.Latitude),
 		Longitude:   copyFloatPtr(fields.Longitude),
+		Contact:     copyStringPtr(fields.Contact),
+		OpeningTime: copyStringPtr(fields.OpeningTime),
+		ClosingTime: copyStringPtr(fields.ClosingTime),
+		Gallery:     copyGalleryValue(fields.Gallery),
 		HeroImage:   copyStringPtr(heroImageURL),
 		CreatedAt:   now,
 		UpdatedAt:   now,
@@ -395,6 +508,15 @@ func (m *memoryDestinationRepo) Update(ctx context.Context, id uuid.UUID, fields
 	if fields.Description != nil {
 		dest.Description = copyStringPtr(fields.Description)
 	}
+	if fields.Contact != nil {
+		dest.Contact = copyStringPtr(fields.Contact)
+	}
+	if fields.OpeningTime != nil {
+		dest.OpeningTime = copyStringPtr(fields.OpeningTime)
+	}
+	if fields.ClosingTime != nil {
+		dest.ClosingTime = copyStringPtr(fields.ClosingTime)
+	}
 	if fields.Latitude != nil {
 		dest.Latitude = copyFloatPtr(fields.Latitude)
 	}
@@ -403,6 +525,9 @@ func (m *memoryDestinationRepo) Update(ctx context.Context, id uuid.UUID, fields
 	}
 	if heroImageURL != nil {
 		dest.HeroImage = copyStringPtr(heroImageURL)
+	}
+	if fields.Gallery != nil {
+		dest.Gallery = copyGalleryValue(fields.Gallery)
 	}
 	if statusOverride != nil {
 		dest.Status = *statusOverride
@@ -522,6 +647,9 @@ func destinationMatchesQuery(dest *domain.Destination, needle string) bool {
 	}
 	if dest.Description != nil {
 		fields = append(fields, *dest.Description)
+	}
+	if dest.Contact != nil {
+		fields = append(fields, *dest.Contact)
 	}
 	for _, field := range fields {
 		if strings.Contains(strings.ToLower(field), needle) {
@@ -713,10 +841,50 @@ func cloneDestination(src *domain.Destination) *domain.Destination {
 	dest.Description = copyStringPtr(src.Description)
 	dest.Latitude = copyFloatPtr(src.Latitude)
 	dest.Longitude = copyFloatPtr(src.Longitude)
+	dest.Contact = copyStringPtr(src.Contact)
+	dest.OpeningTime = copyStringPtr(src.OpeningTime)
+	dest.ClosingTime = copyStringPtr(src.ClosingTime)
+	dest.Gallery = cloneGallery(src.Gallery)
 	dest.HeroImage = copyStringPtr(src.HeroImage)
 	dest.UpdatedBy = copyUUIDPtr(src.UpdatedBy)
 	dest.DeletedAt = copyTimePtr(src.DeletedAt)
 	return &dest
+}
+
+func cloneGallery(src domain.DestinationGallery) domain.DestinationGallery {
+	if src == nil {
+		return nil
+	}
+	if len(src) == 0 {
+		return domain.DestinationGallery{}
+	}
+	out := make(domain.DestinationGallery, len(src))
+	for i, media := range src {
+		out[i] = domain.DestinationMedia{
+			URL:      media.URL,
+			Ordering: media.Ordering,
+		}
+		if media.Caption != nil {
+			caption := *media.Caption
+			out[i].Caption = &caption
+		}
+	}
+	return out
+}
+
+func copyGalleryValue(src *domain.DestinationGallery) domain.DestinationGallery {
+	if src == nil {
+		return nil
+	}
+	return cloneGallery(*src)
+}
+
+func copyGalleryPtr(src *domain.DestinationGallery) *domain.DestinationGallery {
+	if src == nil {
+		return nil
+	}
+	cloned := cloneGallery(*src)
+	return &cloned
 }
 
 func cloneChange(src *domain.DestinationChangeRequest) *domain.DestinationChangeRequest {
@@ -785,6 +953,10 @@ func copyChangeFields(src domain.DestinationChangeFields) domain.DestinationChan
 		Country:            copyStringPtr(src.Country),
 		Category:           copyStringPtr(src.Category),
 		Description:        copyStringPtr(src.Description),
+		Contact:            copyStringPtr(src.Contact),
+		OpeningTime:        copyStringPtr(src.OpeningTime),
+		ClosingTime:        copyStringPtr(src.ClosingTime),
+		Gallery:            copyGalleryPtr(src.Gallery),
 		Latitude:           copyFloatPtr(src.Latitude),
 		Longitude:          copyFloatPtr(src.Longitude),
 		Status:             copyStatusPtr(src.Status),

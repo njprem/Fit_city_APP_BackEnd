@@ -25,13 +25,16 @@ func (r *DestinationRepository) Create(ctx context.Context, fields domain.Destin
 	const query = `
 		INSERT INTO travel_destination (
 			name, slug, city, country, category, description,
-			latitude, longitude, hero_image_url, status, version, updated_by
+			latitude, longitude, contact, opening_time, closing_time,
+			gallery, hero_image_url, status, version, updated_by
 		) VALUES (
 			:name, :slug, :city, :country, :category, :description,
-			:latitude, :longitude, :hero_image_url, :status, 1, :updated_by
+			:latitude, :longitude, :contact, :opening_time, :closing_time,
+			:gallery, :hero_image_url, :status, 1, :updated_by
 		)
 		RETURNING id, name, slug, status, version, city, country, category, description,
-		          latitude, longitude, hero_image_url, created_at, updated_at, updated_by, deleted_at
+		          latitude, longitude, contact, opening_time, closing_time, gallery,
+		          hero_image_url, created_at, updated_at, updated_by, deleted_at
 	`
 
 	args := map[string]any{
@@ -43,6 +46,10 @@ func (r *DestinationRepository) Create(ctx context.Context, fields domain.Destin
 		"description":    nullString(fields.Description),
 		"latitude":       nullFloat(fields.Latitude),
 		"longitude":      nullFloat(fields.Longitude),
+		"contact":        nullString(fields.Contact),
+		"opening_time":   nullString(fields.OpeningTime),
+		"closing_time":   nullString(fields.ClosingTime),
+		"gallery":        galleryValue(fields.Gallery),
 		"hero_image_url": nullStringOr(heroImageURL),
 		"status":         status,
 		"updated_by":     createdBy,
@@ -99,6 +106,21 @@ func (r *DestinationRepository) Update(ctx context.Context, id uuid.UUID, fields
 		args = append(args, nullString(fields.Description))
 		idx++
 	}
+	if fields.Contact != nil {
+		setParts = append(setParts, fmt.Sprintf("contact = $%d", idx))
+		args = append(args, nullString(fields.Contact))
+		idx++
+	}
+	if fields.OpeningTime != nil {
+		setParts = append(setParts, fmt.Sprintf("opening_time = $%d", idx))
+		args = append(args, nullString(fields.OpeningTime))
+		idx++
+	}
+	if fields.ClosingTime != nil {
+		setParts = append(setParts, fmt.Sprintf("closing_time = $%d", idx))
+		args = append(args, nullString(fields.ClosingTime))
+		idx++
+	}
 	if fields.Latitude != nil {
 		setParts = append(setParts, fmt.Sprintf("latitude = $%d", idx))
 		args = append(args, nullFloat(fields.Latitude))
@@ -107,6 +129,11 @@ func (r *DestinationRepository) Update(ctx context.Context, id uuid.UUID, fields
 	if fields.Longitude != nil {
 		setParts = append(setParts, fmt.Sprintf("longitude = $%d", idx))
 		args = append(args, nullFloat(fields.Longitude))
+		idx++
+	}
+	if fields.Gallery != nil {
+		setParts = append(setParts, fmt.Sprintf("gallery = $%d", idx))
+		args = append(args, galleryValue(fields.Gallery))
 		idx++
 	}
 
@@ -127,7 +154,8 @@ func (r *DestinationRepository) Update(ctx context.Context, id uuid.UUID, fields
 		SET %s
 		WHERE id = $%d
 		RETURNING id, name, slug, status, version, city, country, category, description,
-		          latitude, longitude, hero_image_url, created_at, updated_at, updated_by, deleted_at
+		          latitude, longitude, contact, opening_time, closing_time, gallery,
+		          hero_image_url, created_at, updated_at, updated_by, deleted_at
 	`, strings.Join(setParts, ", "), idx)
 
 	args = append(args, id)
@@ -149,7 +177,8 @@ func (r *DestinationRepository) Archive(ctx context.Context, id uuid.UUID, updat
 		    version = version + 1
 		WHERE id = $1
 		RETURNING id, name, slug, status, version, city, country, category, description,
-		          latitude, longitude, hero_image_url, created_at, updated_at, updated_by, deleted_at
+		          latitude, longitude, contact, opening_time, closing_time, gallery,
+		          hero_image_url, created_at, updated_at, updated_by, deleted_at
 	`
 	var dest domain.Destination
 	if err := r.db.GetContext(ctx, &dest, query, id, updatedBy); err != nil {
@@ -176,7 +205,8 @@ func (r *DestinationRepository) HardDelete(ctx context.Context, id uuid.UUID) er
 func (r *DestinationRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.Destination, error) {
 	const query = `
 		SELECT id, name, slug, status, version, city, country, category, description,
-		       latitude, longitude, hero_image_url, created_at, updated_at, updated_by, deleted_at
+		       latitude, longitude, contact, opening_time, closing_time, gallery,
+		       hero_image_url, created_at, updated_at, updated_by, deleted_at
 		FROM travel_destination
 		WHERE id = $1
 	`
@@ -190,7 +220,8 @@ func (r *DestinationRepository) FindByID(ctx context.Context, id uuid.UUID) (*do
 func (r *DestinationRepository) FindPublishedByID(ctx context.Context, id uuid.UUID) (*domain.Destination, error) {
 	const query = `
 		SELECT id, name, slug, status, version, city, country, category, description,
-		       latitude, longitude, hero_image_url, created_at, updated_at, updated_by, deleted_at
+		       latitude, longitude, contact, opening_time, closing_time, gallery,
+		       hero_image_url, created_at, updated_at, updated_by, deleted_at
 		FROM travel_destination
 		WHERE id = $1 AND status = 'published' AND deleted_at IS NULL
 	`
@@ -204,7 +235,8 @@ func (r *DestinationRepository) FindPublishedByID(ctx context.Context, id uuid.U
 func (r *DestinationRepository) FindBySlug(ctx context.Context, slug string) (*domain.Destination, error) {
 	const query = `
 		SELECT id, name, slug, status, version, city, country, category, description,
-		       latitude, longitude, hero_image_url, created_at, updated_at, updated_by, deleted_at
+		       latitude, longitude, contact, opening_time, closing_time, gallery,
+		       hero_image_url, created_at, updated_at, updated_by, deleted_at
 		FROM travel_destination
 		WHERE slug = $1 AND deleted_at IS NULL
 	`
@@ -218,7 +250,8 @@ func (r *DestinationRepository) FindBySlug(ctx context.Context, slug string) (*d
 func (r *DestinationRepository) ListPublished(ctx context.Context, limit, offset int, query string) ([]domain.Destination, error) {
 	const base = `
 		SELECT id, name, slug, status, version, city, country, category, description,
-		       latitude, longitude, hero_image_url, created_at, updated_at, updated_by, deleted_at
+		       latitude, longitude, contact, opening_time, closing_time, gallery,
+		       hero_image_url, created_at, updated_at, updated_by, deleted_at
 		FROM travel_destination
 		WHERE status = 'published' AND deleted_at IS NULL
 	`
@@ -289,6 +322,13 @@ func nullFloat(ptr *float64) sql.NullFloat64 {
 		return sql.NullFloat64{Valid: false}
 	}
 	return sql.NullFloat64{Float64: *ptr, Valid: true}
+}
+
+func galleryValue(ptr *domain.DestinationGallery) domain.DestinationGallery {
+	if ptr == nil {
+		return nil
+	}
+	return append(domain.DestinationGallery(nil), (*ptr)...)
 }
 
 var _ ports.DestinationRepository = (*DestinationRepository)(nil)

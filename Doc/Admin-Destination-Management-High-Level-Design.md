@@ -4,7 +4,7 @@
 Admin Destination Management introduces a governed content workflow that lets authorized administrators stage, review, and publish destination changes without disrupting what end users currently see. Instead of directly mutating the `travel_destination` table, every create, update, or delete is captured as a change request inside a new Destination Change Handler module. A second eligible admin must approve the pending change before it is promoted to the live destination catalog and versioned for rollback. This design satisfies the product directive in the Week7 Double-C SRS to validate inputs before saving, support draft states, record published version numbers, and surface clear confirmation messaging after successful updates.
 
 ## 2. Goals & Success Criteria
-- Allow privileged admins to compose new destination content (metadata, hero imagery, geo coordinates) with server-side validation at every save point.
+- Allow privileged admins to compose new destination content (metadata, hero imagery, galleries, contact info, operating hours, geo coordinates) with server-side validation at every save point.
 - Enable draft and “submit for review” behavior so authors can stage work while reviewers control publication.
 - Ensure no single admin can unilaterally alter the live destination list—an approval step is required to publish or delete content.
 - Persist versioned snapshots of published destinations (`version` numbers + change metadata) to enable rollback and auditability.
@@ -57,7 +57,7 @@ Admin Destination Management introduces a governed content workflow that lets au
 ## 6. User Journeys
 
 ### 6.1 Author Saves Draft (Create/Update)
-1. Author opens admin editor, fills destination fields (name, city, hero image, etc.).
+1. Author opens admin editor, fills destination fields (name, city, contact info, operating hours, hero image, gallery, etc.).
 2. Frontend issues `POST /api/v1/admin/destination-changes` (new change) or `PUT /api/v1/admin/destination-changes/{id}` (update draft) with payload and temporary hero image reference.
 3. `DestinationChangeHandler.SaveDraft` validates fields (non-empty name, coordinate ranges, allowed file type). On failure returns 400 with field errors.
 4. Valid draft persists to `destination_change_request` table with status `draft`, storing payload diff, hero image temp key, author metadata, and incremental draft version.
@@ -75,9 +75,9 @@ Admin Destination Management introduces a governed content workflow that lets au
 2. Reviewer examines payload (including hero image preview) via `GET /api/v1/admin/destination-changes/{id}`.
 3. Reviewer calls `POST /api/v1/admin/destination-changes/{id}/approve`.
 4. `DestinationChangeHandler.Approve` checks reviewer ≠ submitter, ensures status `pending_review`, and opens transaction:
-   - For **create**: inserts new row into `travel_destination`, sets `status` (draft/published) as per payload, assigns `version=1`.
-   - For **update**: applies diff to existing destination via `DestinationService.ApplyUpdate`, increments `version`, updates `updated_at`, `updated_by`.
-   - For **delete**: sets `status=archived` (soft) or removes row (hard) per request; hero image removed if flagged.
+   - For **create**: inserts new row into `travel_destination`, sets `status` (draft/published) as per payload, assigns `version=1`, persists contact/hours, and materializes gallery media.
+   - For **update**: applies diff to existing destination via `DestinationService.ApplyUpdate`, increments `version`, updates `updated_at`, `updated_by`, syncs contact/hours, and upserts gallery ordering/media records.
+   - For **delete**: sets `status=archived` (soft) or removes row (hard) per request; hero image and gallery assets removed if flagged.
    - Records snapshot in `destination_version` table for rollback (version number, payload, reviewer).
    - Marks change request `approved`, `reviewed_by`, `reviewed_at`, `published_version`.
 5. Transaction commits; system returns `200 { "message": "Destination updated successfully", "destination": { ... } }`.
@@ -135,9 +135,9 @@ sequenceDiagram
     A->>H: POST /admin/destination-changes {draft payload}
     H->>C: SaveDraft(ctx, payload, author)
     C->>C: Validate fields + media metadata
-    alt hero image provided
-        C->>S: Upload temp asset
-        S-->>C: temp_key/url
+    alt media provided
+        C->>S: Upload hero image + gallery assets
+        S-->>C: temp_keys/urls
     end
     C->>R: Upsert draft (status=draft)
     R-->>C: change_request
@@ -181,6 +181,9 @@ sequenceDiagram
   - `updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`
   - `updated_by UUID NULL REFERENCES users(id)`
   - `deleted_at TIMESTAMPTZ NULL`
+  - `contact JSONB` (structured contact details such as phone, email, website, social handles)
+  - `opening_time TIME` and `closing_time TIME` (local business hours; nullable for always-open destinations)
+  - `timezone TEXT` (optional—determines interpretation of opening/closing times)
 
 ### 8.2 `destination_change_request`
 | Column | Type | Notes |
@@ -188,8 +191,9 @@ sequenceDiagram
 | `id` | UUID | Primary key (`uuid_generate_v4`) |
 | `destination_id` | UUID | NULL for create, populated for update/delete |
 | `action` | TEXT | `create`, `update`, `delete` |
-| `payload` | JSONB | Proposed destination fields (same schema as API) |
-| `hero_image_temp_key` | TEXT | Object storage key for staged asset |
+| `payload` | JSONB | Proposed destination fields (including contact, hours, media gallery) |
+| `hero_image_temp_key` | TEXT | Object storage key for staged hero asset |
+| `gallery_temp_keys` | JSONB | Array of staged gallery asset keys |
 | `status` | TEXT | `draft`, `pending_review`, `approved`, `rejected` |
 | `draft_version` | INT | Incremented on every save to prevent lost updates |
 | `submitted_by` | UUID | Author admin |
@@ -200,21 +204,32 @@ sequenceDiagram
 | `created_at` / `updated_at` | TIMESTAMPTZ | Audit timestamps |
 | `rejection_reason` | TEXT | Optional reviewer feedback |
 
-### 8.3 `destination_version`
+### 8.3 `destination_media`
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | UUID | PK |
+| `destination_id` | UUID | References `travel_destination` |
+| `object_key` | TEXT | Final MinIO/S3 object key |
+| `ordering` | INT | Display order within gallery |
+| `caption` | TEXT | Optional caption/alt text |
+| `created_at` | TIMESTAMPTZ | Audit timestamp |
+
+### 8.4 `destination_version`
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | BIGSERIAL | PK |
 | `destination_id` | UUID | Nullable for create drafts (becomes non-null post-approval) |
 | `version` | BIGINT | Monotonic per destination |
 | `action` | TEXT | `create`, `update`, `delete` |
-| `payload` | JSONB | Snapshot of published destination |
+| `payload` | JSONB | Snapshot of published destination, including contact, hours, and gallery metadata |
 | `approved_by` | UUID | Reviewer admin |
 | `change_request_id` | UUID | Link to request |
 | `created_at` | TIMESTAMPTZ | Publication timestamp |
 
-### 8.4 Domain Models
+### 8.5 Domain Models
 - `domain.DestinationChange` and `domain.DestinationVersion` structs introduced.
-- Update `domain.Destination` to include `Slug`, `Status`, `Version`, `DeletedAt`, `HeroImageTempKey` (optional for staging).
+- Update `domain.Destination` to include `Slug`, `Status`, `Version`, `DeletedAt`, `Contact`, `OpeningTime`, `ClosingTime`, `Timezone`, `Gallery []DestinationMedia`, and staging helpers (`HeroImageTempKey`, `GalleryTempKeys`).
+- Add `domain.DestinationMedia` struct for gallery items.
 
 ## 9. API Design
 
@@ -244,7 +259,19 @@ sequenceDiagram
     "latitude": 40.785091,
     "longitude": -73.968285,
     "status": "draft",
-    "hero_image_upload_id": "temporary-upload-uuid"
+    "contact": {
+      "phone": "+1-212-310-6600",
+      "email": "info@centralparknyc.org",
+      "website": "https://www.centralparknyc.org"
+    },
+    "opening_time": "06:00:00",
+    "closing_time": "23:00:00",
+    "timezone": "America/New_York",
+    "hero_image_upload_id": "temporary-upload-uuid",
+    "gallery_upload_ids": [
+      "tmp-gallery-001",
+      "tmp-gallery-002"
+    ]
   }
 }
 ```
@@ -267,7 +294,19 @@ sequenceDiagram
       "latitude": 40.785091,
       "longitude": -73.968285,
       "status": "draft",
-      "hero_image_upload_id": "temporary-upload-uuid"
+      "contact": {
+        "phone": "+1-212-310-6600",
+        "email": "info@centralparknyc.org",
+        "website": "https://www.centralparknyc.org"
+      },
+      "opening_time": "06:00:00",
+      "closing_time": "23:00:00",
+      "timezone": "America/New_York",
+      "hero_image_upload_id": "temporary-upload-uuid",
+      "gallery_upload_ids": [
+        "tmp-gallery-001",
+        "tmp-gallery-002"
+      ]
     },
     "submitted_by": {
       "id": "author-uuid",
@@ -291,7 +330,25 @@ sequenceDiagram
     "latitude": 40.785091,
     "longitude": -73.968285,
     "status": "published",
-    "hero_image_url": "https://cdn.fitcity/destinations/central-park.jpg",
+    "contact": {
+      "phone": "+1-212-310-6600",
+      "email": "info@centralparknyc.org",
+      "website": "https://www.centralparknyc.org"
+    },
+    "opening_time": "06:00:00",
+    "closing_time": "23:00:00",
+    "timezone": "America/New_York",
+    "hero_image_url": "https://cdn.fitcity/destinations/central-park/hero.jpg",
+    "gallery": [
+      {
+        "url": "https://cdn.fitcity/destinations/central-park/gallery-1.jpg",
+        "caption": "Bethesda Fountain"
+      },
+      {
+        "url": "https://cdn.fitcity/destinations/central-park/gallery-2.jpg",
+        "caption": "Bow Bridge"
+      }
+    ],
     "version": 6,
     "updated_at": "2024-06-23T10:14:05Z",
     "updated_by": "reviewer-uuid"
@@ -299,17 +356,22 @@ sequenceDiagram
 }
 ```
 
-### 9.2 Hero Image Upload
+### 9.2 Media Uploads
 - `POST /api/v1/admin/destination-changes/{id}/hero-image`
-  - Multipart upload; stored in staging path `destinations/drafts/{id}/...`.
-  - On approval, asset moved/renamed to `destinations/published/{destination_id}/...`.
+  - Multipart upload; stored in staging path `destinations/drafts/{id}/hero/...`.
+  - On approval, asset promoted to `destinations/published/{destination_id}/hero/...`.
+- `POST /api/v1/admin/destination-changes/{id}/gallery`
+  - Multipart upload supporting multiple files; each stored as `destinations/drafts/{id}/gallery/{uuid}.ext`.
+  - Response returns `gallery_upload_ids` for inclusion in subsequent draft payloads.
+  - On approval, assets promoted to `destinations/published/{destination_id}/gallery/{ordering}.ext` and `destination_media` rows created.
+  - Deleting or reordering gallery items handled via `DELETE` / `PATCH` endpoints that mutate staged keys before submission (future enhancement).
 
 ### 9.3 Public Endpoints
 - `GET /api/v1/destinations?status=published` – unchanged, but filter ensures only published versions.
 - `GET /api/v1/destinations/{destination_id}` – returns the published destination payload used by both public view and admin preview:
 ```json
 {
-  "destination": {
+"destination": {
     "name": "Central Park",
     "city": "New York",
     "country": "USA",
@@ -317,8 +379,22 @@ sequenceDiagram
     "category": "Nature",
     "latitude": 40.785091,
     "longitude": -73.968285,
-    "status": "draft",
-    "hero_image_upload_id": "temporary-upload-uuid"
+    "status": "published",
+    "contact": {
+      "phone": "+1-212-310-6600",
+      "email": "info@centralparknyc.org",
+      "website": "https://www.centralparknyc.org"
+    },
+    "opening_time": "06:00:00",
+    "closing_time": "23:00:00",
+    "timezone": "America/New_York",
+    "hero_image_url": "https://cdn.fitcity/destinations/central-park/hero.jpg",
+    "gallery": [
+      {
+        "url": "https://cdn.fitcity/destinations/central-park/gallery-1.jpg",
+        "caption": "Bethesda Fountain"
+      }
+    ]
   }
 }
 ```
@@ -334,13 +410,16 @@ sequenceDiagram
 - `502 media_error`: storage failure.
 
 ## 10. Business Rules & Validation
-- Validate required fields (name, status, coordinates) **before** saving drafts and submissions.
-- Enforce hero image MIME types and size limits; store sanitized metadata.
+- Validate required fields (name, status, coordinates, contact channels as configured) **before** saving drafts and submissions.
+- Enforce hero image and gallery media MIME types/size limits; store sanitized metadata.
+- Ensure contact payload contains at least one reachable channel (phone, email, or website) and normalize formats.
+- Validate `opening_time`/`closing_time` (closing must be after opening within the configured timezone; overnight support via flag).
 - Maintain `status` transitions: drafts -> pending_review -> approved/rejected; only approved requests alter live table.
 - All create, update, and delete operations are staged as change requests and require approval before updating the live destination table.
 - Submitter cannot approve their own change; approval requires a different admin account.
 - Allow authors to “Save Draft” multiple times; each save increments `draft_version`.
 - Publication increments `destination.version` and appends to `destination_version`.
+- Gallery must contain between 1 and 10 images when published (configurable); alt text/captions recommended for accessibility.
 - Soft delete is default; hard delete requires feature flag and additional confirmation comment.
 - Approval triggers success confirmation message returned in API.
 - Rejection must include `rejection_reason` (min length 10 characters) to guide author revisions.
@@ -365,6 +444,8 @@ sequenceDiagram
   - `MINIO_BUCKET_DESTINATIONS`
   - `DESTINATION_IMAGE_MAX_BYTES` (default 5MB)
   - `DESTINATION_ALLOWED_CATEGORIES`
+  - `DESTINATION_GALLERY_MAX_ITEMS` (default 10)
+  - `DESTINATION_OPERATING_HOURS_REQUIRED` (boolean)
   - `ENABLE_DESTINATION_VIEW`, `ENABLE_DESTINATION_DRAFT`, `ENABLE_DESTINATION_APPROVAL`, `ENABLE_DESTINATION_DELETE`
   - `DESTINATION_HARD_DELETE_ALLOWED`
   - `DESTINATION_APPROVAL_REQUIRED` (default true; controls whether approval step is enforced in non-prod)
