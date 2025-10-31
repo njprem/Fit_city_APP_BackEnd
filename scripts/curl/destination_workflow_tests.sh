@@ -7,13 +7,21 @@ AUTHOR_TOKEN=${AUTHOR_TOKEN:-}
 REVIEWER_TOKEN=${REVIEWER_TOKEN:-}
 HISTORY_FILE=${HISTORY_FILE:-scripts/curl/last_destination_commands.log}
 UPLOAD_SOURCE_DIR=${UPLOAD_SOURCE_DIR:-$HOME/Pictures/BingWallpaper}
-DEST_PUBLIC_BASE=${DEST_PUBLIC_BASE:-http://localhost:9000/fitcity-destinations}
+MINIO_URL=${MINIO_URL:-http://localhost:9000}
+MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-hKzeWB2Am1scFVSP}
+MINIO_ALIAS=${MINIO_ALIAS:-fitcity}
+MINIO_BUCKET=${MINIO_BUCKET:-fitcity-destinations}
+DEST_PUBLIC_BASE=${DEST_PUBLIC_BASE:-$MINIO_URL/$MINIO_BUCKET}
 REAL_UPLOAD_ENABLED=${REAL_UPLOAD_ENABLED:-1}
 UPLOAD_MAX_BYTES=${UPLOAD_MAX_BYTES:-5242880}
 MC_BINARY=${MC_BINARY:-scripts/bin/mc}
 MC_URL=${MC_URL:-https://dl.min.io/client/mc/release/linux-amd64/mc}
 CREATE_SUCCESS_PHOTO_COUNT=${CREATE_SUCCESS_PHOTO_COUNT:-3}
 CREATE_REJECT_PHOTO_COUNT=${CREATE_REJECT_PHOTO_COUNT:-1}
+BULK_DESTINATION_COUNT=${BULK_DESTINATION_COUNT:-20}
+BULK_DESTINATION_MIN_PHOTOS=${BULK_DESTINATION_MIN_PHOTOS:-1}
+BULK_DESTINATION_MAX_PHOTOS=${BULK_DESTINATION_MAX_PHOTOS:-3}
 
 if [[ -z "$AUTHOR_TOKEN" || -z "$REVIEWER_TOKEN" ]]; then
   echo "Set AUTHOR_TOKEN and REVIEWER_TOKEN environment variables before running this script." >&2
@@ -29,6 +37,7 @@ mkdir -p "$(dirname "$HISTORY_FILE")"
 
 CURRENT_SCENARIO=""
 MC=""
+MINIO_URL=${MINIO_URL%/}
 DEST_PUBLIC_BASE=${DEST_PUBLIC_BASE%/}
 
 start_scenario_log() {
@@ -231,15 +240,15 @@ ensure_mc() {
 
 ensure_minio_alias() {
   ensure_mc
-  log_command "$MC" alias set fitcity http://localhost:9000 minioadmin hKzeWB2Am1scFVSP
-  "$MC" alias set fitcity http://localhost:9000 minioadmin hKzeWB2Am1scFVSP >/dev/null
+  log_command "$MC" alias set "$MINIO_ALIAS" "$MINIO_URL" "$MINIO_ACCESS_KEY" "$MINIO_SECRET_KEY"
+  "$MC" alias set "$MINIO_ALIAS" "$MINIO_URL" "$MINIO_ACCESS_KEY" "$MINIO_SECRET_KEY" >/dev/null
 }
 
 ensure_minio_bucket() {
   ensure_minio_alias
-  if ! "$MC" ls fitcity/fitcity-destinations >/dev/null 2>&1; then
-    log_command "$MC" mb fitcity/fitcity-destinations
-    "$MC" mb fitcity/fitcity-destinations >/dev/null
+  if ! "$MC" ls "$MINIO_ALIAS/$MINIO_BUCKET" >/dev/null 2>&1; then
+    log_command "$MC" mb "$MINIO_ALIAS/$MINIO_BUCKET"
+    "$MC" mb "$MINIO_ALIAS/$MINIO_BUCKET" >/dev/null
   fi
 }
 
@@ -340,8 +349,8 @@ upload_gallery_files() {
     uuid=$(uuidgen | tr 'A-Z' 'a-z')
     object_key="destinations/changes/$change_id/gallery/${uuid}.${ext}"
     echo "[gallery] Uploading image #$ordering -> $object_key" >&2
-    log_command "$MC" cp "$file_path" "fitcity/fitcity-destinations/$object_key"
-    "$MC" cp "$file_path" "fitcity/fitcity-destinations/$object_key" >/dev/null
+    log_command "$MC" cp "$file_path" "$MINIO_ALIAS/$MINIO_BUCKET/$object_key"
+    "$MC" cp "$file_path" "$MINIO_ALIAS/$MINIO_BUCKET/$object_key" >/dev/null
     local url="$DEST_PUBLIC_BASE/$object_key"
     gallery=$(echo "$gallery" | jq --arg url "$url" --arg caption "$basename" --argjson ordering "$ordering" '. + [{url: $url, caption: $caption, ordering: $ordering}]')
     ordering=$((ordering + 1))
@@ -422,6 +431,10 @@ apply_real_uploads() {
 create_destination_record() {
   local name=$1
   local status=$2
+  local photo_count=${3:-2}
+  if (( photo_count < 1 )); then
+    photo_count=1
+  fi
   local payload_json
   payload_json=$(build_create_payload "$name" "$status" | jq -c '.')
   local create_resp
@@ -430,7 +443,7 @@ create_destination_record() {
   change_id=$(echo "$create_resp" | jq -r '.change_request.id')
   local draft_version
   draft_version=$(echo "$create_resp" | jq -r '.change_request.draft_version')
-  draft_version=$(apply_real_uploads "$change_id" "$draft_version" 2 "seed:$name")
+  draft_version=$(apply_real_uploads "$change_id" "$draft_version" "$photo_count" "seed:$name")
   submit_change "$change_id" "" >/dev/null
   approve_change "$change_id"
 }
@@ -483,6 +496,39 @@ scenario_create_publish_reject() {
   reject_resp=$(reject_change "$change_id" "Additional documentation required.")
   echo "Rejected change status:"
   echo "$reject_resp" | jq '.change_request'
+}
+
+scenario_bulk_create_destinations() {
+  start_scenario_log "bulk_create_destinations"
+  echo "== Bulk Create Destinations =="
+  local count=$BULK_DESTINATION_COUNT
+  local min_photos=$BULK_DESTINATION_MIN_PHOTOS
+  local max_photos=$BULK_DESTINATION_MAX_PHOTOS
+  if (( min_photos < 1 )); then
+    min_photos=1
+  fi
+  if (( max_photos < min_photos )); then
+    max_photos=$min_photos
+  fi
+  for ((i = 1; i <= count; i++)); do
+    local name="Bulk Destination $i $(random_suffix)"
+    local photo_count=$min_photos
+    if (( max_photos > min_photos )); then
+      photo_count=$((RANDOM % (max_photos - min_photos + 1) + min_photos))
+    fi
+    echo "-- [$i/$count] Creating $name with $photo_count photos"
+    local approve_resp
+    approve_resp=$(create_destination_record "$name" "published" "$photo_count")
+    local destination_id
+    destination_id=$(echo "$approve_resp" | jq -r '.destination.id // empty')
+    if [[ -z "$destination_id" ]]; then
+      echo "Failed to create destination for $name"
+      echo "$approve_resp" | jq '.'
+      exit 1
+    fi
+    echo "Created destination $destination_id"
+  done
+  echo "Bulk creation complete: $count destinations published."
 }
 
 scenario_update_published_success() {
@@ -710,6 +756,7 @@ list_scenarios() {
   cat <<'EOF'
 create_publish_success
 create_publish_reject
+bulk_create_destinations
 update_published_success
 update_published_reject
 update_draft_success
@@ -734,11 +781,17 @@ Environment:
   AUTHOR_TOKEN    Bearer token for authoring admin (required)
   REVIEWER_TOKEN  Bearer token for reviewer admin (required)
   UPLOAD_SOURCE_DIR  Directory containing images (default ~/Pictures/BingWallpaper)
-  DEST_PUBLIC_BASE   Public base URL for destination media (default http://localhost:9000/fitcity-destinations)
+  MINIO_URL       Object storage endpoint for mc (default http://localhost:9000)
+  MINIO_ACCESS_KEY / MINIO_SECRET_KEY  Credentials (default minioadmin / hKzeWB2Am1scFVSP)
+  MINIO_BUCKET    Destination bucket name (default fitcity-destinations)
+  DEST_PUBLIC_BASE   Public base URL for destination media (default MINIO_URL/MINIO_BUCKET)
   REAL_UPLOAD_ENABLED  Set to 0 to skip real uploads
   UPLOAD_MAX_BYTES   Max file size (bytes) when picking random images (default 5242880)
   CREATE_SUCCESS_PHOTO_COUNT  Total photos (hero + gallery) for create publish success (default 3)
   CREATE_REJECT_PHOTO_COUNT   Total photos for create reject scenario (default 1)
+  BULK_DESTINATION_COUNT      Number of destinations for bulk create scenario (default 20)
+  BULK_DESTINATION_MIN_PHOTOS Minimum photos per destination in bulk create (default 1)
+  BULK_DESTINATION_MAX_PHOTOS Maximum photos per destination in bulk create (default 3)
   HISTORY_FILE     Where to append executed curl commands (default scripts/curl/last_destination_commands.log)
 EOF
 }
@@ -753,6 +806,7 @@ main() {
     list) list_scenarios ;;
     create_publish_success) scenario_create_publish_success ;;
     create_publish_reject) scenario_create_publish_reject ;;
+    bulk_create_destinations) scenario_bulk_create_destinations ;;
     update_published_success) scenario_update_published_success ;;
     update_published_reject) scenario_update_published_reject ;;
     update_draft_success) scenario_update_draft_success ;;
