@@ -8,6 +8,12 @@ ALTER TABLE travel_destination
     ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES user_account(id),
     ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 
+CREATE INDEX IF NOT EXISTS idx_travel_destination_status
+    ON travel_destination(status);
+
+CREATE INDEX IF NOT EXISTS idx_travel_destination_updated_at
+    ON travel_destination(updated_at DESC);
+
 UPDATE travel_destination
 SET status = 'published'
 WHERE status IS NULL OR status = '';
@@ -56,5 +62,21 @@ CREATE TABLE IF NOT EXISTS destination_version (
 
 CREATE UNIQUE INDEX IF NOT EXISTS destination_version_unique
     ON destination_version(destination_id, version);
+
+CREATE TABLE IF NOT EXISTS travel_destination_audit (
+    id BIGSERIAL PRIMARY KEY,
+    destination_id UUID NOT NULL REFERENCES travel_destination(id) ON DELETE CASCADE,
+    actor_id UUID NOT NULL REFERENCES user_account(id),
+    operation TEXT NOT NULL,
+    result TEXT NOT NULL DEFAULT 'success',
+    changes JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_travel_destination_audit_destination
+    ON travel_destination_audit(destination_id);
+
+CREATE INDEX IF NOT EXISTS idx_travel_destination_audit_created_at
+    ON travel_destination_audit(created_at DESC);
 
 COMMIT;
