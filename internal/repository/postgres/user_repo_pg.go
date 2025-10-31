@@ -40,7 +40,10 @@ func (r *UserRepository) UpsertGoogleUser(ctx context.Context, email string, ful
         VALUES ($1, $2, $3, FALSE)
         ON CONFLICT (email) DO UPDATE
         SET full_name = COALESCE(EXCLUDED.full_name, user_account.full_name),
-            user_image_url = COALESCE(EXCLUDED.user_image_url, user_account.user_image_url),
+            user_image_url = CASE
+                WHEN user_account.profile_completed THEN user_account.user_image_url
+                ELSE COALESCE(EXCLUDED.user_image_url, user_account.user_image_url)
+            END,
             profile_completed = user_account.profile_completed OR EXCLUDED.profile_completed,
             updated_at = NOW()
         RETURNING id, email, username, full_name, user_image_url,

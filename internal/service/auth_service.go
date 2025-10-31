@@ -198,7 +198,21 @@ func (s *AuthService) LoginWithGoogle(ctx context.Context, idToken string) (*Aut
 		}
 	}
 
-	user, err := s.users.UpsertGoogleUser(ctx, email, namePtr, picturePtr)
+	var existing *domain.User
+	if fetched, fetchErr := s.users.FindByEmail(ctx, email); fetchErr == nil {
+		existing = fetched
+	} else if !isNotFound(fetchErr) {
+		return nil, fetchErr
+	}
+
+	pictureForUpsert := picturePtr
+	if existing != nil {
+		if existing.ProfileCompleted || hasCustomProfileImage(existing) {
+			pictureForUpsert = nil
+		}
+	}
+
+	user, err := s.users.UpsertGoogleUser(ctx, email, namePtr, pictureForUpsert)
 	if err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrEmailAlreadyUsed
@@ -214,7 +228,7 @@ func (s *AuthService) LoginWithGoogle(ctx context.Context, idToken string) (*Aut
 		return nil, err
 	}
 
-	if picturePtr != nil && s.shouldCacheGooglePicture(user.ImageURL, *picturePtr) && s.storage != nil && s.profileBucket != "" {
+	if picturePtr != nil && !user.ProfileCompleted && !hasCustomProfileImage(user) && s.shouldCacheGooglePicture(user.ImageURL, *picturePtr) && s.storage != nil && s.profileBucket != "" {
 		if cachedURL, cacheErr := s.cacheGoogleProfileImage(ctx, user.ID, *picturePtr); cacheErr == nil && cachedURL != nil {
 			updated, updateErr := s.users.UpdateProfile(ctx, user.ID, nil, nil, cachedURL, user.ProfileCompleted)
 			if updateErr != nil {
@@ -592,6 +606,24 @@ func (s *AuthService) shouldCacheGooglePicture(existing *string, pictureURL stri
 		return true
 	}
 	return false
+}
+
+func hasCustomProfileImage(user *domain.User) bool {
+	if user == nil || user.ImageURL == nil {
+		return false
+	}
+	current := strings.TrimSpace(*user.ImageURL)
+	if current == "" {
+		return false
+	}
+	lower := strings.ToLower(current)
+	if strings.Contains(lower, "googleusercontent.com") {
+		return false
+	}
+	if strings.Contains(lower, "/google/") {
+		return false
+	}
+	return true
 }
 
 func extensionFromContentType(contentType string) string {

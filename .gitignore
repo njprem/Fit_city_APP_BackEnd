@@ -2,3 +2,5 @@
 .gocache/
 .cache/
 *.env
+scripts/bin
+last_destination_commands.log
