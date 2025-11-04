@@ -10,8 +10,9 @@ import (
 
 type ReviewRepository interface {
 	Create(ctx context.Context, review *domain.Review) (*domain.Review, error)
-	Update(ctx context.Context, review *domain.Review) (*domain.Review, error)
-	Delete(ctx context.Context, id uuid.UUID) error
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Review, error)
-	ListByDestination(ctx context.Context, destinationID uuid.UUID, limit, offset int) ([]domain.Review, error)
+	ListByDestination(ctx context.Context, destinationID uuid.UUID, filter domain.ReviewListFilter) ([]domain.Review, error)
+	AggregateByDestination(ctx context.Context, destinationID uuid.UUID, filter domain.ReviewAggregateFilter) (*domain.ReviewAggregate, error)
+	SoftDelete(ctx context.Context, id uuid.UUID, deletedBy uuid.UUID) error
+	Delete(ctx context.Context, id uuid.UUID) error
 }
