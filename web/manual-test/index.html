@@ -196,6 +196,7 @@
     <div class="tab-buttons">
       <button class="tab-button active" data-tab="authTab">Auth</button>
       <button class="tab-button" data-tab="managementTab">Destination Management</button>
+      <button class="tab-button" data-tab="reviewsTab">Reviews</button>
     </div>
 
     <div id="authTab" class="tab-panel active">
@@ -431,6 +432,93 @@
           <input id="mgmtListPublishedQuery" type="text" placeholder="e.g. central" />
           <button id="mgmtListPublished">List published destinations</button>
           <pre id="mgmtListPublishedResult"></pre>
+        </section>
+      </div>
+    </div>
+    <div id="reviewsTab" class="tab-panel">
+      <div class="panel-grid">
+        <section>
+          <h2>Create Review</h2>
+          <p class="muted">Requires login. Rating is 0–5. Attach up to five images (JPEG, PNG, or WebP).</p>
+          <label for="reviewsCreateDestinationId">Destination ID</label>
+          <input id="reviewsCreateDestinationId" type="text" placeholder="uuid" />
+          <label for="reviewsCreateRating">Rating</label>
+          <input id="reviewsCreateRating" type="number" min="0" max="5" value="5" />
+          <label for="reviewsCreateTitle">Title (optional)</label>
+          <input id="reviewsCreateTitle" type="text" placeholder="Amazing place" />
+          <label for="reviewsCreateContent">Content (optional, requires title)</label>
+          <textarea id="reviewsCreateContent" placeholder="Share your experience..."></textarea>
+          <label for="reviewsCreateImages">Images</label>
+          <input id="reviewsCreateImages" type="file" multiple accept="image/jpeg,image/png,image/webp" />
+          <button id="reviewsCreateSubmit" type="button">Submit review</button>
+          <pre id="reviewsCreateResult"></pre>
+        </section>
+
+        <section>
+          <h2>List Reviews</h2>
+          <label for="reviewsListDestinationId">Destination ID</label>
+          <input id="reviewsListDestinationId" type="text" placeholder="uuid" />
+          <div class="row">
+            <div>
+              <label for="reviewsListLimit">Limit</label>
+              <input id="reviewsListLimit" type="number" min="1" value="20" />
+            </div>
+            <div>
+              <label for="reviewsListOffset">Offset</label>
+              <input id="reviewsListOffset" type="number" min="0" value="0" />
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label for="reviewsListRating">Rating</label>
+              <input id="reviewsListRating" type="number" min="0" max="5" placeholder="exact" />
+            </div>
+            <div>
+              <label for="reviewsListMinRating">Min rating</label>
+              <input id="reviewsListMinRating" type="number" min="0" max="5" />
+            </div>
+            <div>
+              <label for="reviewsListMaxRating">Max rating</label>
+              <input id="reviewsListMaxRating" type="number" min="0" max="5" />
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label for="reviewsListPostedAfter">Posted after</label>
+              <input id="reviewsListPostedAfter" type="text" placeholder="RFC3339 timestamp" />
+            </div>
+            <div>
+              <label for="reviewsListPostedBefore">Posted before</label>
+              <input id="reviewsListPostedBefore" type="text" placeholder="RFC3339 timestamp" />
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label for="reviewsListSort">Sort</label>
+              <select id="reviewsListSort">
+                <option value="created_at" selected>created_at</option>
+                <option value="rating">rating</option>
+              </select>
+            </div>
+            <div>
+              <label for="reviewsListOrder">Order</label>
+              <select id="reviewsListOrder">
+                <option value="desc" selected>desc</option>
+                <option value="asc">asc</option>
+              </select>
+            </div>
+          </div>
+          <button id="reviewsListSubmit" type="button">Fetch reviews</button>
+          <pre id="reviewsListResult"></pre>
+        </section>
+
+        <section>
+          <h2>Delete Review</h2>
+          <p class="muted">Requires login as review author or admin.</p>
+          <label for="reviewsDeleteId">Review ID</label>
+          <input id="reviewsDeleteId" type="text" placeholder="uuid" />
+          <button id="reviewsDeleteSubmit" class="danger" type="button">Delete review</button>
+          <pre id="reviewsDeleteResult"></pre>
         </section>
       </div>
     </div>
@@ -1232,6 +1320,120 @@
       const result = await request(url);
       if ($('mgmtListPublishedResult')) {
         $('mgmtListPublishedResult').textContent = pretty(result);
+      }
+    });
+
+    attachClick('reviewsCreateSubmit', async () => {
+      const destId = $('reviewsCreateDestinationId').value.trim();
+      const ratingValue = $('reviewsCreateRating').value.trim();
+      if (!destId) {
+        if ($('reviewsCreateResult')) {
+          $('reviewsCreateResult').textContent = pretty({ status: 0, body: 'Destination ID required' });
+        }
+        return;
+      }
+      if (!ratingValue) {
+        if ($('reviewsCreateResult')) {
+          $('reviewsCreateResult').textContent = pretty({ status: 0, body: 'Rating is required' });
+        }
+        return;
+      }
+      const rating = parseInt(ratingValue, 10);
+      if (Number.isNaN(rating)) {
+        if ($('reviewsCreateResult')) {
+          $('reviewsCreateResult').textContent = pretty({ status: 0, body: 'Rating must be an integer' });
+        }
+        return;
+      }
+      const formData = new FormData();
+      formData.append('rating', String(rating));
+      const title = $('reviewsCreateTitle').value.trim();
+      const content = $('reviewsCreateContent').value.trim();
+      if (title) {
+        formData.append('title', title);
+      }
+      if (content) {
+        formData.append('content', content);
+      }
+      const filesInput = $('reviewsCreateImages');
+      if (filesInput && filesInput.files && filesInput.files.length) {
+        Array.from(filesInput.files).forEach((file) => {
+          formData.append('images', file, file.name);
+        });
+      }
+      const result = await request(`/api/v1/destinations/${destId}/reviews`, {
+        method: 'POST',
+        body: formData,
+      });
+      if ($('reviewsCreateResult')) {
+        $('reviewsCreateResult').textContent = pretty(result);
+      }
+    });
+
+    attachClick('reviewsListSubmit', async () => {
+      const destId = $('reviewsListDestinationId').value.trim();
+      if (!destId) {
+        if ($('reviewsListResult')) {
+          $('reviewsListResult').textContent = pretty({ status: 0, body: 'Destination ID required' });
+        }
+        return;
+      }
+      const params = new URLSearchParams();
+      const limit = parseInt($('reviewsListLimit').value, 10);
+      if (!Number.isNaN(limit) && limit > 0) {
+        params.set('limit', String(limit));
+      }
+      const offset = parseInt($('reviewsListOffset').value, 10);
+      if (!Number.isNaN(offset) && offset >= 0) {
+        params.set('offset', String(offset));
+      }
+      const rating = parseInt($('reviewsListRating').value, 10);
+      if (!Number.isNaN(rating)) {
+        params.set('rating', String(rating));
+      }
+      const minRating = parseInt($('reviewsListMinRating').value, 10);
+      if (!Number.isNaN(minRating)) {
+        params.set('min_rating', String(minRating));
+      }
+      const maxRating = parseInt($('reviewsListMaxRating').value, 10);
+      if (!Number.isNaN(maxRating)) {
+        params.set('max_rating', String(maxRating));
+      }
+      const postedAfter = $('reviewsListPostedAfter').value.trim();
+      if (postedAfter) {
+        params.set('posted_after', postedAfter);
+      }
+      const postedBefore = $('reviewsListPostedBefore').value.trim();
+      if (postedBefore) {
+        params.set('posted_before', postedBefore);
+      }
+      const sort = $('reviewsListSort').value;
+      if (sort) {
+        params.set('sort', sort);
+      }
+      const order = $('reviewsListOrder').value;
+      if (order) {
+        params.set('order', order);
+      }
+      const query = params.toString();
+      const url = `/api/v1/destinations/${destId}/reviews${query ? `?${query}` : ''}`;
+      const result = await request(url);
+      if ($('reviewsListResult')) {
+        $('reviewsListResult').textContent = pretty(result);
+      }
+    });
+
+    attachClick('reviewsDeleteSubmit', async () => {
+      const reviewId = $('reviewsDeleteId').value.trim();
+      if (!reviewId) {
+        if ($('reviewsDeleteResult')) {
+          $('reviewsDeleteResult').textContent = pretty({ status: 0, body: 'Review ID required' });
+        }
+        return;
+      }
+      const result = await request(`/api/v1/reviews/${reviewId}`, { method: 'DELETE' });
+      if ($('reviewsDeleteResult')) {
+        $('reviewsDeleteResult').textContent = pretty(result);
       }
     });
 

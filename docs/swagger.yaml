@@ -118,6 +118,125 @@ definitions:
         example: user@example.com
         type: string
     type: object
+  http.ReviewAggregate:
+    properties:
+      average_rating:
+        example: 4.2
+        format: float
+        type: number
+      rating_counts:
+        additionalProperties:
+          type: integer
+        example:
+          "0": 0
+          "1": 1
+          "2": 2
+          "3": 4
+          "4": 6
+          "5": 8
+        type: object
+      total_reviews:
+        example: 21
+        type: integer
+    type: object
+  http.ReviewAuthor:
+    properties:
+      avatar_url:
+        example: https://cdn.fitcity/profiles/user-123.png
+        type: string
+      display_name:
+        example: Jane Doe
+        type: string
+      id:
+        example: 0a1b2c3d-4e5f-6789-abcd-ef0123456789
+        type: string
+      username:
+        example: janedoe
+        type: string
+    type: object
+  http.ReviewCreateResponse:
+    properties:
+      aggregate:
+        $ref: '#/definitions/http.ReviewAggregate'
+      review:
+        $ref: '#/definitions/http.Review'
+    type: object
+  http.ReviewListResponse:
+    properties:
+      average_rating:
+        example: 4.2
+        format: float
+        type: number
+      destination_id:
+        example: 9fd13fd2-63c5-4f29-a210-4a1a8e285f74
+        type: string
+      limit:
+        example: 20
+        type: integer
+      offset:
+        example: 0
+        type: integer
+      rating_counts:
+        additionalProperties:
+          type: integer
+        example:
+          "0": 0
+          "1": 1
+          "2": 2
+          "3": 4
+          "4": 6
+          "5": 8
+        type: object
+      reviews:
+        items:
+          $ref: '#/definitions/http.Review'
+        type: array
+      total_reviews:
+        example: 21
+        type: integer
+    type: object
+  http.ReviewMedia:
+    properties:
+      id:
+        example: 123e4567-e89b-12d3-a456-426614174000
+        type: string
+      ordering:
+        example: 0
+        type: integer
+      url:
+        example: https://cdn.fitcity/reviews/destination/review/image-1.jpg
+        type: string
+    type: object
+  http.Review:
+    properties:
+      content:
+        example: Loved the guided tour and scenery.
+        type: string
+      created_at:
+        example: "2024-05-13T12:00:00Z"
+        type: string
+      destination_id:
+        example: 9fd13fd2-63c5-4f29-a210-4a1a8e285f74
+        type: string
+      id:
+        example: 123e4567-e89b-12d3-a456-426614174000
+        type: string
+      media:
+        items:
+          $ref: '#/definitions/http.ReviewMedia'
+        type: array
+      rating:
+        example: 5
+        type: integer
+      reviewer:
+        $ref: '#/definitions/http.ReviewAuthor'
+      title:
+        example: Incredible experience
+        type: string
+      updated_at:
+        example: "2024-05-14T12:00:00Z"
+        type: string
+    type: object
   http.RegisterRequest:
     properties:
       email:
@@ -811,6 +930,162 @@ paths:
       summary: Get published destination
       tags:
       - Destinations
+  /destinations/{destination_id}/reviews:
+    get:
+      description: List reviews for a published destination with optional filters.
+      parameters:
+      - description: Destination UUID
+        in: path
+        name: destination_id
+        required: true
+        type: string
+      - description: Maximum number of reviews to return (default 20, max 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Number of reviews to skip
+        in: query
+        name: offset
+        type: integer
+      - description: Filter by exact rating (0-5)
+        in: query
+        name: rating
+        type: integer
+      - description: Minimum rating (0-5)
+        in: query
+        name: min_rating
+        type: integer
+      - description: Maximum rating (0-5)
+        in: query
+        name: max_rating
+        type: integer
+      - description: Include reviews posted on or after this timestamp (RFC3339)
+        in: query
+        name: posted_after
+        type: string
+      - description: Include reviews posted on or before this timestamp (RFC3339)
+        in: query
+        name: posted_before
+        type: string
+      - description: Sort field (`created_at` or `rating`)
+        in: query
+        name: sort
+        type: string
+      - description: Sort order (`asc` or `desc`)
+        in: query
+        name: order
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.ReviewListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: List destination reviews
+      tags:
+      - Reviews
+    post:
+      consumes:
+      - multipart/form-data
+      description: Create a review for a destination. Requires authentication. Users may upload up to five images.
+      parameters:
+      - description: Destination UUID
+        in: path
+        name: destination_id
+        required: true
+        type: string
+      - description: Rating value between 0 and 5
+        in: formData
+        name: rating
+        required: true
+        type: integer
+      - description: Optional review title
+        in: formData
+        name: title
+        type: string
+      - description: Optional review content (requires title if provided)
+        in: formData
+        name: content
+        type: string
+      - collectionFormat: multi
+        description: Review images (JPEG, PNG, or WebP)
+        in: formData
+        name: images
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/http.ReviewCreateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create review
+      tags:
+      - Reviews
+  /reviews/{id}:
+    delete:
+      description: Soft delete a review. Only the author or an administrator may delete a review.
+      parameters:
+      - description: Review UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete review
+      tags:
+      - Reviews
   /admin/destination-changes:
     get:
       description: List destination change requests filtered by status or destination.
