@@ -26,7 +26,7 @@ The reviews & ratings feature lets authenticated users submit qualitative feedba
 ### 5.1 `review` Table Updates
 - Alter `rating` constraint to allow zero: `CHECK (rating BETWEEN 0 AND 5)`.
 - Ensure `updated_at` is maintained on insert/update triggers (service layer will set).
-- Preserve unique index `review_unique_user_destination_idx` (still one review per user per destination).
+- Replace the original unique index with `CREATE UNIQUE INDEX review_user_destination_active_idx ON review(user_id, destination_id) WHERE deleted_at IS NULL` so each user can have at most one *active* review per destination while still permitting a new review after soft deletion.
 - Add soft-delete metadata: `deleted_at TIMESTAMPTZ NULL`, `deleted_by UUID NULL REFERENCES user_account(id)`. Queries must filter on `deleted_at IS NULL` for public data.
 
 ### 5.2 New `review_media` Table
