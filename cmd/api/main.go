@@ -81,6 +81,7 @@ func main() {
 	destinationVersionRepo := postgres.NewDestinationVersionRepo(db)
 	reviewRepo := postgres.NewReviewRepo(db)
 	reviewMediaRepo := postgres.NewReviewMediaRepo(db)
+	favoriteRepo := postgres.NewFavoriteRepo(db)
 
 	destinationPublicBase := cfg.MinIOPublicURL
 	if destinationPublicBase != "" && cfg.MinIOBucketProfile != "" {
@@ -113,6 +114,7 @@ func main() {
 			MaxImageBytes: cfg.DestinationImageMaxBytes,
 		},
 	)
+	favoriteService := service.NewFavoriteService(favoriteRepo, destinationRepo)
 
 	router := httpx.NewRouter(cfg.AllowOrigins)
 	httpx.RegisterPages(router, cfg.FrontendBaseURL)
@@ -124,6 +126,7 @@ func main() {
 		Delete: cfg.EnableDestinationDelete,
 	})
 	httpx.RegisterReviews(router, authService, reviewService)
+	httpx.RegisterFavorites(router, authService, favoriteService)
 	httpx.RegisterSwagger(router)
 
 	router.Logger.Fatal(router.Start(":" + cfg.Port))
