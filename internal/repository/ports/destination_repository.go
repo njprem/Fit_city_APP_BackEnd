@@ -16,5 +16,5 @@ type DestinationRepository interface {
 	FindByID(ctx context.Context, id uuid.UUID) (*domain.Destination, error)
 	FindPublishedByID(ctx context.Context, id uuid.UUID) (*domain.Destination, error)
 	FindBySlug(ctx context.Context, slug string) (*domain.Destination, error)
-	ListPublished(ctx context.Context, limit, offset int, query string) ([]domain.Destination, error)
+	ListPublished(ctx context.Context, limit, offset int, filter domain.DestinationListFilter) ([]domain.Destination, error)
 }

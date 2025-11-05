@@ -17,8 +17,11 @@ func NewDestinationService(destRepo ports.DestinationRepository) *DestinationSer
 	return &DestinationService{destinations: destRepo}
 }
 
-func (s *DestinationService) ListPublished(ctx context.Context, limit, offset int, query string) ([]domain.Destination, error) {
-	return s.destinations.ListPublished(ctx, limit, offset, query)
+func (s *DestinationService) ListPublished(ctx context.Context, limit, offset int, filter domain.DestinationListFilter) ([]domain.Destination, error) {
+	if !filter.Sort.IsValid() {
+		filter.Sort = domain.DestinationSortUpdatedAtDesc
+	}
+	return s.destinations.ListPublished(ctx, limit, offset, filter)
 }
 
 func (s *DestinationService) GetPublishedByID(ctx context.Context, id uuid.UUID) (*domain.Destination, error) {

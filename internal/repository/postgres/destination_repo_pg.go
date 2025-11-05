@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 
 	"github.com/njprem/Fit_city_APP_BackEnd/internal/domain"
 	"github.com/njprem/Fit_city_APP_BackEnd/internal/repository/ports"
@@ -247,36 +248,107 @@ func (r *DestinationRepository) FindBySlug(ctx context.Context, slug string) (*d
 	return &dest, nil
 }
 
-func (r *DestinationRepository) ListPublished(ctx context.Context, limit, offset int, query string) ([]domain.Destination, error) {
+func (r *DestinationRepository) ListPublished(ctx context.Context, limit, offset int, filter domain.DestinationListFilter) ([]domain.Destination, error) {
 	const base = `
-		SELECT id, name, slug, status, version, city, country, category, description,
-		       latitude, longitude, contact, opening_time, closing_time, gallery,
-		       hero_image_url, created_at, updated_at, updated_by, deleted_at
-		FROM travel_destination
-		WHERE status = 'published' AND deleted_at IS NULL
+		SELECT
+			d.id,
+			d.name,
+			d.slug,
+			d.status,
+			d.version,
+			d.city,
+			d.country,
+			d.category,
+			d.description,
+			d.latitude,
+			d.longitude,
+			d.contact,
+			d.opening_time,
+			d.closing_time,
+			d.gallery,
+			d.hero_image_url,
+			d.created_at,
+			d.updated_at,
+			d.updated_by,
+			d.deleted_at,
+			COALESCE(AVG(r.rating)::float8, 0) AS average_rating,
+			COUNT(r.id)::int AS review_count
+		FROM travel_destination d
+		LEFT JOIN review r ON r.destination_id = d.id AND r.deleted_at IS NULL
+		WHERE d.status = 'published' AND d.deleted_at IS NULL
 	`
-	params := make([]any, 0, 3)
+
+	params := make([]any, 0, 6)
 	var builder strings.Builder
 	builder.WriteString(base)
 
-	if trimmed := strings.TrimSpace(query); trimmed != "" {
-		searchPattern := "%" + trimmed + "%"
+	if trimmed := strings.TrimSpace(filter.Search); trimmed != "" {
 		placeholder := fmt.Sprintf("$%d", len(params)+1)
 		builder.WriteString(`
-		AND (
-			name ILIKE ` + placeholder + `
-			OR city ILIKE ` + placeholder + `
-			OR country ILIKE ` + placeholder + `
-			OR category ILIKE ` + placeholder + `
-			OR description ILIKE ` + placeholder + `
-		)`)
-		params = append(params, searchPattern)
+		AND to_tsvector(
+			'simple',
+			COALESCE(d.name, '') || ' ' ||
+			COALESCE(d.city, '') || ' ' ||
+			COALESCE(d.country, '') || ' ' ||
+			COALESCE(d.category, '') || ' ' ||
+			COALESCE(d.description, '')
+		) @@ plainto_tsquery('simple', ` + placeholder + `)
+		`)
+		params = append(params, trimmed)
+	}
+
+	if len(filter.Categories) > 0 {
+		categories := make([]string, 0, len(filter.Categories))
+		for _, category := range filter.Categories {
+			if trimmed := strings.TrimSpace(category); trimmed != "" {
+				categories = append(categories, trimmed)
+			}
+		}
+		if len(categories) > 0 {
+			placeholder := fmt.Sprintf("$%d", len(params)+1)
+			builder.WriteString(`
+		AND d.category = ANY(` + placeholder + `)
+			`)
+			params = append(params, pq.StringArray(categories))
+		}
+	}
+
+	builder.WriteString(`
+		GROUP BY d.id
+	`)
+
+	havingClauses := make([]string, 0, 2)
+	if filter.MinRating != nil {
+		placeholder := fmt.Sprintf("$%d", len(params)+1)
+		havingClauses = append(havingClauses, "COALESCE(AVG(r.rating)::float8, 0) >= "+placeholder)
+		params = append(params, *filter.MinRating)
+	}
+	if filter.MaxRating != nil {
+		placeholder := fmt.Sprintf("$%d", len(params)+1)
+		havingClauses = append(havingClauses, "COALESCE(AVG(r.rating)::float8, 0) <= "+placeholder)
+		params = append(params, *filter.MaxRating)
+	}
+	if len(havingClauses) > 0 {
+		builder.WriteString("\n\tHAVING " + strings.Join(havingClauses, " AND "))
+	}
+
+	builder.WriteString("\n\tORDER BY ")
+	switch filter.Sort {
+	case domain.DestinationSortRatingAsc:
+		builder.WriteString("average_rating ASC, d.name ASC")
+	case domain.DestinationSortRatingDesc:
+		builder.WriteString("average_rating DESC, d.name ASC")
+	case domain.DestinationSortNameAsc:
+		builder.WriteString("d.name ASC")
+	case domain.DestinationSortNameDesc:
+		builder.WriteString("d.name DESC")
+	default:
+		builder.WriteString("d.updated_at DESC")
 	}
 
 	limitPlaceholder := fmt.Sprintf("$%d", len(params)+1)
 	offsetPlaceholder := fmt.Sprintf("$%d", len(params)+2)
 	builder.WriteString(`
-		ORDER BY updated_at DESC
 		LIMIT ` + limitPlaceholder + ` OFFSET ` + offsetPlaceholder + `
 	`)
 	params = append(params, limit, offset)

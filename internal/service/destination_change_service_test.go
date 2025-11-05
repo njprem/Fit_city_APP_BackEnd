@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"io"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -603,19 +604,68 @@ func (m *memoryDestinationRepo) FindBySlug(ctx context.Context, slug string) (*d
 	return nil, sql.ErrNoRows
 }
 
-func (m *memoryDestinationRepo) ListPublished(ctx context.Context, limit, offset int, query string) ([]domain.Destination, error) {
+func (m *memoryDestinationRepo) ListPublished(ctx context.Context, limit, offset int, filter domain.DestinationListFilter) ([]domain.Destination, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	published := make([]domain.Destination, 0)
-	needle := strings.ToLower(strings.TrimSpace(query))
-	for _, dest := range m.store {
-		if dest.Status == domain.DestinationStatusPublished && dest.DeletedAt == nil {
-			if needle != "" && !destinationMatchesQuery(dest, needle) {
-				continue
-			}
-			published = append(published, *cloneDestination(dest))
+	needle := strings.ToLower(strings.TrimSpace(filter.Search))
+
+	categorySet := map[string]struct{}{}
+	for _, category := range filter.Categories {
+		if trimmed := strings.ToLower(strings.TrimSpace(category)); trimmed != "" {
+			categorySet[trimmed] = struct{}{}
 		}
 	}
+
+	for _, dest := range m.store {
+		if dest.Status != domain.DestinationStatusPublished || dest.DeletedAt != nil {
+			continue
+		}
+		if needle != "" && !destinationMatchesQuery(dest, needle) {
+			continue
+		}
+		if len(categorySet) > 0 {
+			if dest.Category == nil {
+				continue
+			}
+			if _, ok := categorySet[strings.ToLower(strings.TrimSpace(*dest.Category))]; !ok {
+				continue
+			}
+		}
+		if filter.MinRating != nil && dest.AverageRating < *filter.MinRating {
+			continue
+		}
+		if filter.MaxRating != nil && dest.AverageRating > *filter.MaxRating {
+			continue
+		}
+		published = append(published, *cloneDestination(dest))
+	}
+
+	sort.SliceStable(published, func(i, j int) bool {
+		switch filter.Sort {
+		case domain.DestinationSortRatingAsc:
+			if published[i].AverageRating == published[j].AverageRating {
+				return strings.ToLower(published[i].Name) < strings.ToLower(published[j].Name)
+			}
+			return published[i].AverageRating < published[j].AverageRating
+		case domain.DestinationSortRatingDesc:
+			if published[i].AverageRating == published[j].AverageRating {
+				return strings.ToLower(published[i].Name) < strings.ToLower(published[j].Name)
+			}
+			return published[i].AverageRating > published[j].AverageRating
+		case domain.DestinationSortNameAsc:
+			return strings.ToLower(published[i].Name) < strings.ToLower(published[j].Name)
+		case domain.DestinationSortNameDesc:
+			return strings.ToLower(published[i].Name) > strings.ToLower(published[j].Name)
+		default:
+			if published[i].UpdatedAt.Equal(published[j].UpdatedAt) {
+				return strings.ToLower(published[i].Name) < strings.ToLower(published[j].Name)
+			}
+			return published[i].UpdatedAt.After(published[j].UpdatedAt)
+		}
+	})
+
 	if offset >= len(published) {
 		return []domain.Destination{}, nil
 	}

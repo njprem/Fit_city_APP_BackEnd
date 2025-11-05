@@ -2,6 +2,7 @@ package http
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -350,8 +351,11 @@ func (h *DestinationHandler) listPublished(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, util.Error("resource not found"))
 	}
 	limit, offset := parsePagination(c, 20, 0)
-	query := strings.TrimSpace(c.QueryParam("query"))
-	destinations, err := h.destinations.ListPublished(c.Request().Context(), limit, offset, query)
+	filter, err := parseDestinationListFilter(c)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, util.Error(err.Error()))
+	}
+	destinations, err := h.destinations.ListPublished(c.Request().Context(), limit, offset, filter)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, util.Error("unable to list destinations"))
 	}
@@ -532,7 +536,79 @@ func buildDestinationResponse(dest *domain.Destination) util.Envelope {
 	if dest.DeletedAt != nil {
 		resp["deleted_at"] = *dest.DeletedAt
 	}
+	resp["average_rating"] = dest.AverageRating
+	resp["review_count"] = dest.ReviewCount
 	return resp
+}
+
+func parseDestinationListFilter(c echo.Context) (domain.DestinationListFilter, error) {
+	filter := domain.DestinationListFilter{
+		Search: strings.TrimSpace(c.QueryParam("query")),
+		Sort:   domain.DestinationSortUpdatedAtDesc,
+	}
+
+	categories := make([]string, 0)
+	if raw := c.QueryParam("categories"); raw != "" {
+		for _, part := range strings.Split(raw, ",") {
+			if trimmed := strings.TrimSpace(part); trimmed != "" {
+				categories = append(categories, trimmed)
+			}
+		}
+	}
+	if rawValues, ok := c.QueryParams()["category"]; ok {
+		for _, part := range rawValues {
+			if trimmed := strings.TrimSpace(part); trimmed != "" {
+				categories = append(categories, trimmed)
+			}
+		}
+	}
+	if len(categories) > 0 {
+		filter.Categories = categories
+	}
+
+	if v := strings.TrimSpace(c.QueryParam("min_rating")); v != "" {
+		parsed, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return domain.DestinationListFilter{}, errors.New("min_rating must be a number")
+		}
+		if parsed < 0 || parsed > 5 {
+			return domain.DestinationListFilter{}, errors.New("min_rating must be between 0 and 5")
+		}
+		filter.MinRating = &parsed
+	}
+	if v := strings.TrimSpace(c.QueryParam("max_rating")); v != "" {
+		parsed, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return domain.DestinationListFilter{}, errors.New("max_rating must be a number")
+		}
+		if parsed < 0 || parsed > 5 {
+			return domain.DestinationListFilter{}, errors.New("max_rating must be between 0 and 5")
+		}
+		filter.MaxRating = &parsed
+	}
+	if filter.MinRating != nil && filter.MaxRating != nil && *filter.MinRating > *filter.MaxRating {
+		return domain.DestinationListFilter{}, errors.New("min_rating cannot be greater than max_rating")
+	}
+
+	if raw := strings.TrimSpace(c.QueryParam("sort")); raw != "" {
+		value := strings.ToLower(raw)
+		switch value {
+		case string(domain.DestinationSortRatingDesc), "rating":
+			filter.Sort = domain.DestinationSortRatingDesc
+		case string(domain.DestinationSortRatingAsc):
+			filter.Sort = domain.DestinationSortRatingAsc
+		case string(domain.DestinationSortNameAsc), "alphabetical", "alpha":
+			filter.Sort = domain.DestinationSortNameAsc
+		case string(domain.DestinationSortNameDesc), "alpha_desc":
+			filter.Sort = domain.DestinationSortNameDesc
+		case string(domain.DestinationSortUpdatedAtDesc), "updated", "recent":
+			filter.Sort = domain.DestinationSortUpdatedAtDesc
+		default:
+			return domain.DestinationListFilter{}, fmt.Errorf("invalid sort value %q", raw)
+		}
+	}
+
+	return filter, nil
 }
 
 func buildChangeResponse(change *domain.DestinationChangeRequest) util.Envelope {

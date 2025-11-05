@@ -425,7 +425,7 @@ func (m *reviewDestinationRepo) FindBySlug(context.Context, string) (*domain.Des
 	return nil, errors.New("not implemented")
 }
 
-func (m *reviewDestinationRepo) ListPublished(context.Context, int, int, string) ([]domain.Destination, error) {
+func (m *reviewDestinationRepo) ListPublished(context.Context, int, int, domain.DestinationListFilter) ([]domain.Destination, error) {
 	return nil, errors.New("not implemented")
 }
 
