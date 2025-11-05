@@ -317,6 +317,13 @@ definitions:
         items:
           $ref: '#/definitions/http.DestinationMedia'
         type: array
+      average_rating:
+        example: 4.3
+        format: double
+        type: number
+      review_count:
+        example: 128
+        type: integer
       hero_image_url:
         example: https://cdn.fitcity/destinations/central-park.jpg
         type: string
@@ -893,9 +900,27 @@ paths:
         in: query
         name: offset
         type: integer
-      - description: Case-insensitive partial match against name, slug, city, country, category, or description
+      - description: Full text search across name, city, country, category, or description
         in: query
         name: query
+        type: string
+      - description: Comma-separated list of categories to include
+        in: query
+        name: categories
+        type: string
+      - description: Minimum average rating (0-5)
+        format: double
+        in: query
+        name: min_rating
+        type: number
+      - description: Maximum average rating (0-5)
+        format: double
+        in: query
+        name: max_rating
+        type: number
+      - description: Sort order (rating_desc, rating_asc, alpha_asc, alpha_desc, updated_at_desc)
+        in: query
+        name: sort
         type: string
       produces:
       - application/json
