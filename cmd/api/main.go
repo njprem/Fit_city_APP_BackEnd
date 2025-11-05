@@ -37,6 +37,7 @@ func main() {
 		log.SetOutput(io.MultiWriter(os.Stderr, logstashWriter))
 		defer logstashWriter.Close()
 	}
+	log.SetFlags(0)
 
 	db, err := postgres.New(cfg.DatabaseURL)
 	if err != nil {
