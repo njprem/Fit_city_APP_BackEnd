@@ -15,6 +15,7 @@ type Config struct {
 	JWTSecret                    string
 	GoogleAudience               string
 	AllowOrigins                 []string
+	LogstashTCPAddr              string
 	MinIOEndpoint                string
 	MinIOAccessKey               string
 	MinIOSecretKey               string
@@ -69,6 +70,7 @@ func Load() Config {
 		DatabaseURL:                  must("DATABASE_URL"),
 		JWTSecret:                    must("JWT_SECRET"),
 		GoogleAudience:               getenv("GOOGLE_AUDIENCE", ""),
+		LogstashTCPAddr:              getenv("LOGSTASH_TCP_ADDR", ""),
 		MinIOEndpoint:                must("MINIO_ENDPOINT"),
 		MinIOAccessKey:               must("MINIO_ACCESS_KEY"),
 		MinIOSecretKey:               must("MINIO_SECRET_KEY"),

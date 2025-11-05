@@ -10,11 +10,14 @@
 package main
 
 import (
+	"io"
 	"log"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/njprem/Fit_city_APP_BackEnd/internal/config"
+	"github.com/njprem/Fit_city_APP_BackEnd/internal/logging"
 	minioRepo "github.com/njprem/Fit_city_APP_BackEnd/internal/repository/minio"
 	"github.com/njprem/Fit_city_APP_BackEnd/internal/repository/postgres"
 	"github.com/njprem/Fit_city_APP_BackEnd/internal/service"
@@ -25,6 +28,16 @@ import (
 
 func main() {
 	cfg := config.Load()
+
+	if cfg.LogstashTCPAddr != "" {
+		logstashWriter, err := logging.NewLogstashWriter(cfg.LogstashTCPAddr)
+		if err != nil {
+			log.Fatalf("logstash writer: %v", err)
+		}
+		log.SetOutput(io.MultiWriter(os.Stderr, logstashWriter))
+		defer logstashWriter.Close()
+	}
+	log.SetFlags(0)
 
 	db, err := postgres.New(cfg.DatabaseURL)
 	if err != nil {
