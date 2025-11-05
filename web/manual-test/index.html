@@ -189,7 +189,7 @@
 <body>
   <header>
     <h1>FitCity API Manual Tester</h1>
-    <p class="muted">Toggle between Auth and Destination Management to manually exercise backend endpoints.</p>
+    <p class="muted">Toggle between Auth, Destination Management, Reviews, and Favorites to manually exercise backend endpoints.</p>
   </header>
 
   <main>
@@ -197,6 +197,7 @@
       <button class="tab-button active" data-tab="authTab">Auth</button>
       <button class="tab-button" data-tab="managementTab">Destination Management</button>
       <button class="tab-button" data-tab="reviewsTab">Reviews</button>
+      <button class="tab-button" data-tab="favoritesTab">Favorites</button>
     </div>
 
     <div id="authTab" class="tab-panel active">
@@ -519,6 +520,53 @@
           <input id="reviewsDeleteId" type="text" placeholder="uuid" />
           <button id="reviewsDeleteSubmit" class="danger" type="button">Delete review</button>
           <pre id="reviewsDeleteResult"></pre>
+        </section>
+      </div>
+    </div>
+    <div id="favoritesTab" class="tab-panel">
+      <div class="panel-grid">
+        <section>
+          <h2>Save Destination</h2>
+          <p class="muted">Requires login. Adds the destination to your favorites list.</p>
+          <label for="favoritesSaveDestinationId">Destination ID</label>
+          <input id="favoritesSaveDestinationId" type="text" placeholder="uuid" />
+          <button id="favoritesSaveSubmit" type="button">Save destination</button>
+          <pre id="favoritesSaveResult"></pre>
+        </section>
+
+        <section>
+          <h2>Unsave Destination</h2>
+          <p class="muted">Requires login. Removes the destination from your favorites list.</p>
+          <label for="favoritesRemoveDestinationId">Destination ID</label>
+          <input id="favoritesRemoveDestinationId" type="text" placeholder="uuid" />
+          <button id="favoritesRemoveSubmit" class="danger" type="button">Remove from favorites</button>
+          <pre id="favoritesRemoveResult"></pre>
+        </section>
+
+        <section>
+          <h2>List My Favorites</h2>
+          <p class="muted">Calls <code>/api/v1/users/me/favorites</code> using the stored token.</p>
+          <div class="row">
+            <div>
+              <label for="favoritesListLimit">Limit</label>
+              <input id="favoritesListLimit" type="number" min="1" value="20" />
+            </div>
+            <div>
+              <label for="favoritesListOffset">Offset</label>
+              <input id="favoritesListOffset" type="number" min="0" value="0" />
+            </div>
+          </div>
+          <button id="favoritesListSubmit" type="button">Fetch favorites</button>
+          <pre id="favoritesListResult"></pre>
+        </section>
+
+        <section>
+          <h2>Destination Favorites Count</h2>
+          <p class="muted">Fetches <code>/api/v1/destinations/{id}/favorites/count</code>. No auth required.</p>
+          <label for="favoritesCountDestinationId">Destination ID</label>
+          <input id="favoritesCountDestinationId" type="text" placeholder="uuid" />
+          <button id="favoritesCountSubmit" type="button">Fetch count</button>
+          <pre id="favoritesCountResult"></pre>
         </section>
       </div>
     </div>
@@ -1434,6 +1482,70 @@
       const result = await request(`/api/v1/reviews/${reviewId}`, { method: 'DELETE' });
       if ($('reviewsDeleteResult')) {
         $('reviewsDeleteResult').textContent = pretty(result);
+      }
+    });
+
+    attachClick('favoritesSaveSubmit', async () => {
+      const destId = $('favoritesSaveDestinationId').value.trim();
+      if (!destId) {
+        if ($('favoritesSaveResult')) {
+          $('favoritesSaveResult').textContent = pretty({ status: 0, body: 'Destination ID required' });
+        }
+        return;
+      }
+      const result = await request('/api/v1/users/me/favorites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ destination_id: destId }),
+      });
+      if ($('favoritesSaveResult')) {
+        $('favoritesSaveResult').textContent = pretty(result);
+      }
+    });
+
+    attachClick('favoritesRemoveSubmit', async () => {
+      const destId = $('favoritesRemoveDestinationId').value.trim();
+      if (!destId) {
+        if ($('favoritesRemoveResult')) {
+          $('favoritesRemoveResult').textContent = pretty({ status: 0, body: 'Destination ID required' });
+        }
+        return;
+      }
+      const result = await request(`/api/v1/users/me/favorites/${destId}`, { method: 'DELETE' });
+      if ($('favoritesRemoveResult')) {
+        $('favoritesRemoveResult').textContent = pretty(result);
+      }
+    });
+
+    attachClick('favoritesListSubmit', async () => {
+      const params = new URLSearchParams();
+      const limit = parseInt($('favoritesListLimit').value, 10);
+      if (!Number.isNaN(limit) && limit > 0) {
+        params.set('limit', String(limit));
+      }
+      const offset = parseInt($('favoritesListOffset').value, 10);
+      if (!Number.isNaN(offset) && offset >= 0) {
+        params.set('offset', String(offset));
+      }
+      const query = params.toString();
+      const url = `/api/v1/users/me/favorites${query ? `?${query}` : ''}`;
+      const result = await request(url);
+      if ($('favoritesListResult')) {
+        $('favoritesListResult').textContent = pretty(result);
+      }
+    });
+
+    attachClick('favoritesCountSubmit', async () => {
+      const destId = $('favoritesCountDestinationId').value.trim();
+      if (!destId) {
+        if ($('favoritesCountResult')) {
+          $('favoritesCountResult').textContent = pretty({ status: 0, body: 'Destination ID required' });
+        }
+        return;
+      }
+      const result = await request(`/api/v1/destinations/${destId}/favorites/count`);
+      if ($('favoritesCountResult')) {
+        $('favoritesCountResult').textContent = pretty(result);
       }
     });
 
