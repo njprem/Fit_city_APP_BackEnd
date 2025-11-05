@@ -246,6 +246,112 @@ definitions:
         example: StrongPass!23
         type: string
     type: object
+  http.FavoriteSaveRequest:
+    properties:
+      destination_id:
+        example: 5b7a8702-b2c5-4de4-93c9-99322bd49ee2
+        type: string
+    type: object
+  http.FavoriteRecord:
+    properties:
+      destination_id:
+        example: 5b7a8702-b2c5-4de4-93c9-99322bd49ee2
+        type: string
+      id:
+        example: 11edaf11-0c18-43fd-b42d-0cd36b7c178b
+        type: string
+      saved_at:
+        example: "2024-06-23T10:12:07Z"
+        type: string
+    type: object
+  http.FavoriteDestination:
+    properties:
+      category:
+        example: Nature
+        type: string
+      city:
+        example: Probolinggo
+        type: string
+      country:
+        example: Indonesia
+        type: string
+      hero_image_url:
+        example: https://cdn.fitcity.app/destinations/5b7a.../hero.jpg
+        type: string
+      name:
+        example: Mount Bromo
+        type: string
+      slug:
+        example: mount-bromo
+        type: string
+    type: object
+  http.FavoriteItem:
+    properties:
+      destination:
+        $ref: '#/definitions/http.FavoriteDestination'
+      destination_id:
+        example: 5b7a8702-b2c5-4de4-93c9-99322bd49ee2
+        type: string
+      id:
+        example: 11edaf11-0c18-43fd-b42d-0cd36b7c178b
+        type: string
+      saved_at:
+        example: "2024-06-23T10:12:07Z"
+        type: string
+    type: object
+  http.FavoriteListPagination:
+    properties:
+      count:
+        example: 1
+        type: integer
+      limit:
+        example: 20
+        type: integer
+      offset:
+        example: 0
+        type: integer
+      total:
+        example: 57
+        type: integer
+    type: object
+  http.FavoriteListResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/http.FavoriteItem'
+        type: array
+      pagination:
+        $ref: '#/definitions/http.FavoriteListPagination'
+    type: object
+  http.FavoriteSaveResponse:
+    properties:
+      favorite:
+        $ref: '#/definitions/http.FavoriteRecord'
+      message:
+        example: Destination saved to Favorites
+        type: string
+    type: object
+  http.FavoriteRemoveResponse:
+    properties:
+      destination_id:
+        example: 5b7a8702-b2c5-4de4-93c9-99322bd49ee2
+        type: string
+      message:
+        example: Destination removed from Favorites
+        type: string
+    type: object
+  http.FavoriteCountResponse:
+    properties:
+      destination_id:
+        example: 5b7a8702-b2c5-4de4-93c9-99322bd49ee2
+        type: string
+      favorites_count:
+        example: 1342
+        type: integer
+      last_updated_utc:
+        example: "2024-06-23T10:12:07Z"
+        type: string
+    type: object
   http.SuccessResponse:
     properties:
       success:
@@ -1351,6 +1457,153 @@ paths:
       summary: Upload hero image for change request
       tags:
       - Admin Destinations
+  /destinations/{destination_id}/favorites/count:
+    get:
+      description: Retrieve the number of users who saved the specified destination.
+      parameters:
+      - description: Destination UUID
+        in: path
+        name: destination_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.FavoriteCountResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Count destination favorites
+      tags:
+      - Favorites
+  /users/me/favorites:
+    get:
+      description: List destinations saved to the authenticated user's favorites.
+      parameters:
+      - description: Maximum number of favorites to return (default 20, max 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Number of favorites to skip
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.FavoriteListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List my favorites
+      tags:
+      - Favorites
+    post:
+      consumes:
+      - application/json
+      description: Save a destination to the authenticated user's favorites.
+      parameters:
+      - description: Favorite payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/http.FavoriteSaveRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/http.FavoriteSaveResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Save destination
+      tags:
+      - Favorites
+  /users/me/favorites/{destination_id}:
+    delete:
+      description: Remove a destination from the authenticated user's favorites.
+      parameters:
+      - description: Destination UUID
+        in: path
+        name: destination_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.FavoriteRemoveResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Unsave destination
+      tags:
+      - Favorites
 schemes:
 - http
 - https
