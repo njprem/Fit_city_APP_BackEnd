@@ -32,6 +32,7 @@ func registerLogging(e *echo.Echo) {
 		LogStatus:   true,
 		LogMethod:   true,
 		LogLatency:  true,
+		LogRemoteIP: true,
 		LogError:    true,
 		HandleError: true,
 		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
@@ -46,6 +47,7 @@ func registerLogging(e *echo.Echo) {
 			payload := struct {
 				Time      string `json:"time"`
 				UserUUID  string `json:"user_uuid"`
+				IP        string `json:"ip"`
 				LatencyMS int64  `json:"latency_ms"`
 				Request   struct {
 					Method string      `json:"method"`
@@ -60,6 +62,7 @@ func registerLogging(e *echo.Echo) {
 			}{
 				Time:      v.StartTime.Format(time.RFC3339),
 				UserUUID:  userID,
+				IP:        v.RemoteIP,
 				LatencyMS: v.Latency.Milliseconds(),
 			}
 
