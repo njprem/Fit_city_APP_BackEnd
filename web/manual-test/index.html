@@ -184,6 +184,71 @@
       font-size: 0.75rem;
       color: #5c6b80;
     }
+    .builder-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    }
+    .builder-grid .full-width {
+      grid-column: 1 / -1;
+    }
+    .builder-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    button.secondary {
+      background: #475569;
+    }
+    button.secondary:hover {
+      background: #334155;
+    }
+    button.ghost {
+      background: transparent;
+      color: #1f2933;
+      border: 1px solid #d0d7e7;
+    }
+    button.ghost:hover {
+      background: #e2e8f0;
+    }
+    .gallery-builder,
+    .upload-helper {
+      border: 1px dashed #cbd5f5;
+      border-radius: 8px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .gallery-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .gallery-items {
+      display: grid;
+      gap: 12px;
+    }
+    .gallery-item {
+      border: 1px solid #d0d7e7;
+      border-radius: 6px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .gallery-item .builder-grid {
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    }
+    .gallery-item-actions {
+      display: flex;
+      justify-content: flex-end;
+    }
+    .muted.small {
+      font-size: 0.75rem;
+    }
   </style>
 </head>
 <body>
@@ -359,6 +424,139 @@
           <textarea id="mgmtCreateFields">{ "name": "Sample Destination", "city": "New York", "country": "USA", "category": "Nature", "description": "Iconic destination", "status": "draft" }</textarea>
           <button id="mgmtCreateSubmit">Send draft</button>
           <pre id="mgmtCreateResult"></pre>
+        </section>
+        <section>
+          <h2>Destination Field Builder</h2>
+          <p class="muted">Use the form to edit every destination detail. Click &ldquo;Fill JSON with form&rdquo; to sync the payload above or load an existing JSON draft into the form.</p>
+          <div class="builder-grid">
+            <div>
+              <label for="destFieldName">Name</label>
+              <input id="destFieldName" type="text" placeholder="Central Park" />
+            </div>
+            <div>
+              <label for="destFieldSlug">Slug</label>
+              <input id="destFieldSlug" type="text" placeholder="central-park" />
+            </div>
+            <div>
+              <label for="destFieldStatus">Status</label>
+              <select id="destFieldStatus">
+                <option value="">(inherit)</option>
+                <option value="draft">draft</option>
+                <option value="published">published</option>
+                <option value="archived">archived</option>
+              </select>
+            </div>
+          </div>
+          <div class="builder-grid">
+            <div>
+              <label for="destFieldCategory">Category</label>
+              <input id="destFieldCategory" type="text" placeholder="Nature" />
+            </div>
+            <div>
+              <label for="destFieldCity">City</label>
+              <input id="destFieldCity" type="text" placeholder="New York" />
+            </div>
+            <div>
+              <label for="destFieldCountry">Country</label>
+              <input id="destFieldCountry" type="text" placeholder="USA" />
+            </div>
+          </div>
+          <label for="destFieldDescription">Description</label>
+          <textarea id="destFieldDescription" placeholder="Iconic park with year-round events, playgrounds, and skyline views."></textarea>
+          <div class="builder-grid">
+            <div>
+              <label for="destFieldContact">Contact info</label>
+              <input id="destFieldContact" type="text" placeholder="+1 212-310-6600 or reservations@example.com" />
+            </div>
+            <div>
+              <label for="destFieldOpening">Opening time</label>
+              <input id="destFieldOpening" type="text" placeholder="06:00" />
+            </div>
+            <div>
+              <label for="destFieldClosing">Closing time</label>
+              <input id="destFieldClosing" type="text" placeholder="22:00" />
+            </div>
+          </div>
+          <div class="builder-grid">
+            <div>
+              <label for="destFieldLatitude">Latitude</label>
+              <input id="destFieldLatitude" type="number" step="any" placeholder="40.785091" />
+            </div>
+            <div>
+              <label for="destFieldLongitude">Longitude</label>
+              <input id="destFieldLongitude" type="number" step="any" placeholder="-73.968285" />
+            </div>
+            <div>
+              <label for="destFieldHardDelete">Hard delete</label>
+              <select id="destFieldHardDelete">
+                <option value="">(inherit)</option>
+                <option value="true">true</option>
+                <option value="false">false</option>
+              </select>
+            </div>
+          </div>
+          <div class="builder-grid">
+            <div>
+              <label for="destFieldHeroUploadId">Hero image upload ID</label>
+              <input id="destFieldHeroUploadId" type="text" placeholder="temporary-upload-uuid" />
+            </div>
+            <div>
+              <label for="destFieldHeroUrl">Hero image URL</label>
+              <input id="destFieldHeroUrl" type="text" placeholder="https://cdn.fitcity/destinations/central-park.jpg" />
+            </div>
+          </div>
+          <div class="upload-helper">
+            <strong>Hero image upload</strong>
+            <p class="muted small">Requires an existing change request. Uploads use the author token and automatically populate the hero image upload ID field.</p>
+            <div class="builder-grid">
+              <div>
+                <label for="destHeroUploadChangeId">Change request ID</label>
+                <input id="destHeroUploadChangeId" type="text" placeholder="uuid" />
+              </div>
+              <div>
+                <label for="destHeroUploadFile">Hero image file</label>
+                <input id="destHeroUploadFile" type="file" accept="image/*" />
+              </div>
+            </div>
+            <div class="builder-actions">
+              <button id="destHeroUploadButton" type="button" class="secondary">Upload & autofill</button>
+            </div>
+            <pre id="destHeroUploadResult"></pre>
+          </div>
+          <div class="upload-helper">
+            <strong>Gallery upload</strong>
+            <p class="muted small">Upload optional gallery images (multiple files allowed). URLs are added to the builder below for ordering and captions.</p>
+            <div class="builder-grid">
+              <div>
+                <label for="destGalleryUploadChangeId">Change request ID</label>
+                <input id="destGalleryUploadChangeId" type="text" placeholder="uuid" />
+              </div>
+              <div class="full-width">
+                <label for="destGalleryUploadFiles">Gallery images</label>
+                <input id="destGalleryUploadFiles" type="file" multiple accept="image/*" />
+              </div>
+            </div>
+            <div class="builder-actions">
+              <button id="destGalleryUploadButton" type="button" class="secondary">Upload & add to form</button>
+            </div>
+            <pre id="destGalleryUploadResult"></pre>
+          </div>
+          <div class="gallery-builder">
+            <div class="gallery-header">
+              <div>
+                <strong>Gallery</strong>
+                <p class="muted small">Add optional gallery images; only rows with a URL are included.</p>
+              </div>
+              <button id="destGalleryAdd" type="button" class="secondary">Add image</button>
+            </div>
+            <div id="destGalleryItems" class="gallery-items"></div>
+          </div>
+          <div class="builder-actions">
+            <button id="destFieldsApply" type="button">Fill JSON with form</button>
+            <button id="destFieldsLoad" type="button" class="secondary">Load form from JSON</button>
+            <button id="destFieldsClear" type="button" class="ghost">Clear form</button>
+          </div>
+          <pre id="destFieldsResult"></pre>
         </section>
 
         <section>
@@ -629,6 +827,31 @@
       reviewerToken: $('mgmtReviewerToken'),
       createFields: $('mgmtCreateFields'),
     };
+    const destinationBuilderUI = {
+      name: $('destFieldName'),
+      slug: $('destFieldSlug'),
+      status: $('destFieldStatus'),
+      category: $('destFieldCategory'),
+      city: $('destFieldCity'),
+      country: $('destFieldCountry'),
+      description: $('destFieldDescription'),
+      contact: $('destFieldContact'),
+      opening: $('destFieldOpening'),
+      closing: $('destFieldClosing'),
+      latitude: $('destFieldLatitude'),
+      longitude: $('destFieldLongitude'),
+      heroUpload: $('destFieldHeroUploadId'),
+      heroUrl: $('destFieldHeroUrl'),
+      hardDelete: $('destFieldHardDelete'),
+      heroUploadChangeId: $('destHeroUploadChangeId'),
+      heroUploadFile: $('destHeroUploadFile'),
+      heroUploadResult: $('destHeroUploadResult'),
+      galleryUploadChangeId: $('destGalleryUploadChangeId'),
+      galleryUploadFiles: $('destGalleryUploadFiles'),
+      galleryUploadResult: $('destGalleryUploadResult'),
+      galleryList: $('destGalleryItems'),
+      result: $('destFieldsResult'),
+    };
 
     function updateToken(newToken) {
       state.token = newToken || '';
@@ -725,6 +948,249 @@
     function pretty(result) {
       return JSON.stringify(result, null, 2);
     }
+
+    function builderMessage(message) {
+      if (!destinationBuilderUI.result) {
+        return;
+      }
+      if (typeof message === 'string') {
+        destinationBuilderUI.result.textContent = message;
+      } else {
+        destinationBuilderUI.result.textContent = pretty(message);
+      }
+    }
+
+    function setHeroUploadResult(value) {
+      if (!destinationBuilderUI.heroUploadResult) {
+        return;
+      }
+      if (typeof value === 'string') {
+        destinationBuilderUI.heroUploadResult.textContent = value;
+      } else {
+        destinationBuilderUI.heroUploadResult.textContent = pretty(value);
+      }
+    }
+
+    function setGalleryUploadResult(value) {
+      if (!destinationBuilderUI.galleryUploadResult) {
+        return;
+      }
+      if (typeof value === 'string') {
+        destinationBuilderUI.galleryUploadResult.textContent = value;
+      } else {
+        destinationBuilderUI.galleryUploadResult.textContent = pretty(value);
+      }
+    }
+
+    function ensureGalleryPlaceholder() {
+      if (!destinationBuilderUI.galleryList) {
+        return;
+      }
+      if (!destinationBuilderUI.galleryList.children.length) {
+        addGalleryRow();
+      }
+    }
+
+    function addGalleryRow(initial = {}) {
+      if (!destinationBuilderUI.galleryList) {
+        return;
+      }
+      const row = document.createElement('div');
+      row.className = 'gallery-item';
+      row.dataset.role = 'gallery-item';
+      row.innerHTML = `
+        <div class="builder-grid">
+          <div class="full-width">
+            <label>Image URL</label>
+            <input type="text" class="gallery-url" placeholder="https://cdn.fitcity/example.jpg" />
+          </div>
+          <div class="full-width">
+            <label>Caption</label>
+            <input type="text" class="gallery-caption" placeholder="Optional caption" />
+          </div>
+          <div>
+            <label>Ordering</label>
+            <input type="number" min="0" class="gallery-ordering" />
+          </div>
+        </div>
+        <div class="gallery-item-actions">
+          <button type="button" class="ghost gallery-remove">Remove</button>
+        </div>
+      `;
+      const urlInput = row.querySelector('.gallery-url');
+      const captionInput = row.querySelector('.gallery-caption');
+      const orderingInput = row.querySelector('.gallery-ordering');
+      if (urlInput && initial.url) {
+        urlInput.value = initial.url;
+      }
+      if (captionInput && initial.caption) {
+        captionInput.value = initial.caption;
+      }
+      if (orderingInput && typeof initial.ordering !== 'undefined') {
+        orderingInput.value = initial.ordering;
+      }
+      const removeBtn = row.querySelector('.gallery-remove');
+      if (removeBtn) {
+        removeBtn.addEventListener('click', (event) => {
+          event.preventDefault();
+          row.remove();
+          ensureGalleryPlaceholder();
+        });
+      }
+      destinationBuilderUI.galleryList.appendChild(row);
+    }
+
+    function clearDestinationBuilder() {
+      const keys = ['name', 'slug', 'category', 'city', 'country', 'description', 'contact', 'opening', 'closing', 'latitude', 'longitude', 'heroUpload', 'heroUrl'];
+      keys.forEach((key) => {
+        const el = destinationBuilderUI[key];
+        if (el) {
+          el.value = '';
+        }
+      });
+      if (destinationBuilderUI.status) {
+        destinationBuilderUI.status.value = '';
+      }
+      if (destinationBuilderUI.hardDelete) {
+        destinationBuilderUI.hardDelete.value = '';
+      }
+      if (destinationBuilderUI.galleryList) {
+        destinationBuilderUI.galleryList.innerHTML = '';
+      }
+      ensureGalleryPlaceholder();
+    }
+
+    function collectGalleryItems() {
+      if (!destinationBuilderUI.galleryList) {
+        return [];
+      }
+      const items = [];
+      destinationBuilderUI.galleryList.querySelectorAll('[data-role="gallery-item"]').forEach((row) => {
+        const urlInput = row.querySelector('.gallery-url');
+        const captionInput = row.querySelector('.gallery-caption');
+        const orderingInput = row.querySelector('.gallery-ordering');
+        const urlValue = urlInput && typeof urlInput.value === 'string' ? urlInput.value.trim() : '';
+        if (!urlValue) {
+          return;
+        }
+        const item = { url: urlValue };
+        const captionValue = captionInput && typeof captionInput.value === 'string' ? captionInput.value.trim() : '';
+        if (captionValue) {
+          item.caption = captionValue;
+        }
+        const orderingValue = orderingInput && typeof orderingInput.value === 'string' ? orderingInput.value.trim() : '';
+        if (orderingValue) {
+          const parsedOrdering = Number(orderingValue);
+          if (!Number.isNaN(parsedOrdering)) {
+            item.ordering = parsedOrdering;
+          }
+        }
+        items.push(item);
+      });
+      return items;
+    }
+
+    function collectDestinationFields() {
+      const fields = {};
+      const assign = (key, el) => {
+        if (!el || typeof el.value !== 'string') {
+          return;
+        }
+        const value = el.value.trim();
+        if (value) {
+          fields[key] = value;
+        }
+      };
+      const assignNumber = (key, el) => {
+        if (!el || typeof el.value !== 'string') {
+          return;
+        }
+        const value = el.value.trim();
+        if (!value) {
+          return;
+        }
+        const parsed = Number(value);
+        if (!Number.isNaN(parsed)) {
+          fields[key] = parsed;
+        }
+      };
+      assign('name', destinationBuilderUI.name);
+      assign('slug', destinationBuilderUI.slug);
+      assign('category', destinationBuilderUI.category);
+      assign('city', destinationBuilderUI.city);
+      assign('country', destinationBuilderUI.country);
+      assign('description', destinationBuilderUI.description);
+      assign('contact', destinationBuilderUI.contact);
+      assign('opening_time', destinationBuilderUI.opening);
+      assign('closing_time', destinationBuilderUI.closing);
+      assignNumber('latitude', destinationBuilderUI.latitude);
+      assignNumber('longitude', destinationBuilderUI.longitude);
+      assign('hero_image_upload_id', destinationBuilderUI.heroUpload);
+      assign('hero_image_url', destinationBuilderUI.heroUrl);
+      if (destinationBuilderUI.status && destinationBuilderUI.status.value) {
+        fields.status = destinationBuilderUI.status.value;
+      }
+      if (destinationBuilderUI.hardDelete) {
+        const hardDeleteValue = destinationBuilderUI.hardDelete.value;
+        if (hardDeleteValue === 'true') {
+          fields.hard_delete = true;
+        } else if (hardDeleteValue === 'false') {
+          fields.hard_delete = false;
+        }
+      }
+      const gallery = collectGalleryItems();
+      if (gallery.length) {
+        fields.gallery = gallery;
+      }
+      return fields;
+    }
+
+    function populateBuilderFromFields(fields) {
+      clearDestinationBuilder();
+      if (!fields || typeof fields !== 'object') {
+        return;
+      }
+      const setValue = (el, value) => {
+        if (!el || typeof value === 'undefined' || value === null) {
+          return;
+        }
+        if (typeof value === 'number') {
+          el.value = String(value);
+        } else {
+          el.value = value;
+        }
+      };
+      setValue(destinationBuilderUI.name, fields.name);
+      setValue(destinationBuilderUI.slug, fields.slug);
+      setValue(destinationBuilderUI.category, fields.category);
+      setValue(destinationBuilderUI.city, fields.city);
+      setValue(destinationBuilderUI.country, fields.country);
+      setValue(destinationBuilderUI.description, fields.description);
+      setValue(destinationBuilderUI.contact, fields.contact);
+      setValue(destinationBuilderUI.opening, fields.opening_time);
+      setValue(destinationBuilderUI.closing, fields.closing_time);
+      setValue(destinationBuilderUI.latitude, fields.latitude);
+      setValue(destinationBuilderUI.longitude, fields.longitude);
+      setValue(destinationBuilderUI.heroUpload, fields.hero_image_upload_id);
+      setValue(destinationBuilderUI.heroUrl, fields.hero_image_url);
+      if (destinationBuilderUI.status) {
+        destinationBuilderUI.status.value = fields.status || '';
+      }
+      if (destinationBuilderUI.hardDelete) {
+        if (Object.prototype.hasOwnProperty.call(fields, 'hard_delete')) {
+          destinationBuilderUI.hardDelete.value = String(fields.hard_delete);
+        } else {
+          destinationBuilderUI.hardDelete.value = '';
+        }
+      }
+      if (Array.isArray(fields.gallery) && fields.gallery.length && destinationBuilderUI.galleryList) {
+        destinationBuilderUI.galleryList.innerHTML = '';
+        fields.gallery.forEach((item) => addGalleryRow(item));
+      }
+      ensureGalleryPlaceholder();
+    }
+
+    ensureGalleryPlaceholder();
 
     function formatDate(value) {
       if (!value) {
@@ -1198,6 +1664,135 @@
         return null;
       }
     }
+
+    attachClick('destGalleryAdd', (event) => {
+      event.preventDefault();
+      addGalleryRow();
+      builderMessage('Added gallery row.');
+    });
+
+    attachClick('destFieldsApply', (event) => {
+      event.preventDefault();
+      if (!managementUI.createFields) {
+        builderMessage('Fields textarea not found.');
+        return;
+      }
+      const fields = collectDestinationFields();
+      const keys = Object.keys(fields).length;
+      managementUI.createFields.value = keys ? JSON.stringify(fields, null, 2) : '{}';
+      builderMessage(`Fields JSON updated (${keys} key${keys === 1 ? '' : 's'})`);
+    });
+
+    attachClick('destFieldsLoad', (event) => {
+      event.preventDefault();
+      if (!managementUI.createFields) {
+        builderMessage('Fields textarea not found.');
+        return;
+      }
+      const text = managementUI.createFields.value || '{}';
+      const parsed = parseJsonFields(text, 'destFieldsResult');
+      if (!parsed) {
+        return;
+      }
+      populateBuilderFromFields(parsed);
+      builderMessage('Loaded form from JSON.');
+    });
+
+    attachClick('destFieldsClear', (event) => {
+      event.preventDefault();
+      clearDestinationBuilder();
+      builderMessage('Form cleared.');
+    });
+
+    attachClick('destHeroUploadButton', async (event) => {
+      event.preventDefault();
+      const changeIdInput = destinationBuilderUI.heroUploadChangeId;
+      const fileInput = destinationBuilderUI.heroUploadFile;
+      if (!changeIdInput || !fileInput) {
+        builderMessage('Hero upload inputs not found.');
+        return;
+      }
+      const changeId = changeIdInput.value.trim();
+      if (!changeId) {
+        builderMessage('Provide a change request ID before uploading.');
+        return;
+      }
+      if (!fileInput.files || !fileInput.files[0]) {
+        builderMessage('Select an image file to upload.');
+        return;
+      }
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+      builderMessage('Uploading hero image...');
+      setHeroUploadResult('Uploading hero image...');
+      const result = await request(`/api/v1/admin/destination-changes/${changeId}/hero-image`, {
+        method: 'POST',
+        body: formData,
+        tokenOverride: getAuthorToken(),
+      });
+      if (result.status < 400) {
+        const change = result.body && result.body.change_request;
+        const heroId = change && change.fields && change.fields.hero_image_upload_id;
+        if (heroId && destinationBuilderUI.heroUpload) {
+          destinationBuilderUI.heroUpload.value = heroId;
+        }
+        builderMessage({
+          status: result.status,
+          hero_image_upload_id: heroId || 'not returned',
+        });
+        setHeroUploadResult({
+          status: result.status,
+          hero_image_upload_id: heroId || 'not returned',
+        });
+      } else {
+        builderMessage(result);
+        setHeroUploadResult(result);
+      }
+    });
+
+    attachClick('destGalleryUploadButton', async (event) => {
+      event.preventDefault();
+      const changeIdInput = destinationBuilderUI.galleryUploadChangeId;
+      const fallbackChangeId = destinationBuilderUI.heroUploadChangeId;
+      const fileInput = destinationBuilderUI.galleryUploadFiles;
+      if (!fileInput) {
+        setGalleryUploadResult('Gallery upload inputs not found.');
+        return;
+      }
+      const changeId = (changeIdInput && changeIdInput.value.trim()) || (fallbackChangeId && fallbackChangeId.value.trim()) || '';
+      if (!changeId) {
+        setGalleryUploadResult('Provide a change request ID before uploading.');
+        return;
+      }
+      if (!fileInput.files || !fileInput.files.length) {
+        setGalleryUploadResult('Select one or more images to upload.');
+        return;
+      }
+      const formData = new FormData();
+      Array.from(fileInput.files).forEach((file) => formData.append('files', file));
+      setGalleryUploadResult('Uploading gallery images...');
+      builderMessage('Uploading gallery images...');
+      const result = await request(`/api/v1/admin/destination-changes/${changeId}/gallery`, {
+        method: 'POST',
+        body: formData,
+        tokenOverride: getAuthorToken(),
+      });
+      setGalleryUploadResult(result);
+      if (result.status < 400) {
+        const uploads = (result.body && Array.isArray(result.body.gallery_uploads) ? result.body.gallery_uploads : []);
+        uploads.forEach((item) => {
+          if (item && item.url) {
+            addGalleryRow({
+              url: item.url,
+              ordering: typeof item.ordering === 'number' ? item.ordering : undefined,
+            });
+          }
+        });
+        builderMessage(`Uploaded ${uploads.length} gallery ${uploads.length === 1 ? 'image' : 'images'}.`);
+      } else {
+        builderMessage(result);
+      }
+    });
 
     attachClick('mgmtCreateSubmit', async () => {
       const action = $('mgmtCreateAction').value;

@@ -3,6 +3,8 @@ package http
 import (
 	"errors"
 	"fmt"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"strconv"
 	"strings"
@@ -53,6 +55,7 @@ func RegisterDestinations(e *echo.Echo, auth *service.AuthService, destService *
 		admin.GET("", handler.listChanges)
 		admin.GET("/:id", handler.getChange)
 		admin.POST("/:id/hero-image", handler.uploadHeroImage)
+		admin.POST("/:id/gallery", handler.uploadGalleryImages)
 	}
 }
 
@@ -346,6 +349,93 @@ func (h *DestinationHandler) uploadHeroImage(c echo.Context) error {
 	})
 }
 
+func (h *DestinationHandler) uploadGalleryImages(c echo.Context) error {
+	user, ok := CurrentUser(c)
+	if !ok || user == nil {
+		return c.JSON(http.StatusUnauthorized, util.Error("authentication required"))
+	}
+
+	changeID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, util.Error("invalid change id"))
+	}
+
+	change, err := h.workflow.GetChange(c.Request().Context(), changeID)
+	if err != nil {
+		return h.writeChangeError(c, err)
+	}
+	if !h.isActionEnabled(change.Action) {
+		return c.JSON(http.StatusForbidden, util.Error("feature disabled for this action"))
+	}
+
+	if err := c.Request().ParseMultipartForm(32 << 20); err != nil {
+		return c.JSON(http.StatusBadRequest, util.Error("invalid multipart payload"))
+	}
+	form := c.Request().MultipartForm
+	if form == nil {
+		return c.JSON(http.StatusBadRequest, util.Error("invalid multipart payload"))
+	}
+	var headers []*multipart.FileHeader
+	if files := form.File["files"]; files != nil {
+		headers = append(headers, files...)
+	}
+	if files := form.File["files[]"]; files != nil {
+		headers = append(headers, files...)
+	}
+	if files := form.File["gallery"]; files != nil {
+		headers = append(headers, files...)
+	}
+	if files := form.File["gallery[]"]; files != nil {
+		headers = append(headers, files...)
+	}
+	if len(headers) == 0 {
+		return c.JSON(http.StatusBadRequest, util.Error("at least one image file is required"))
+	}
+
+	uploads := make([]service.GalleryImageUpload, 0, len(headers))
+	closers := make([]io.Closer, 0, len(headers))
+	for _, header := range headers {
+		file, err := header.Open()
+		if err != nil {
+			for _, closer := range closers {
+				_ = closer.Close()
+			}
+			return c.JSON(http.StatusBadRequest, util.Error("unable to read upload"))
+		}
+		closers = append(closers, file)
+		uploads = append(uploads, service.GalleryImageUpload{
+			Reader:      file,
+			Size:        header.Size,
+			FileName:    header.Filename,
+			ContentType: header.Header.Get("Content-Type"),
+		})
+	}
+	defer func() {
+		for _, closer := range closers {
+			_ = closer.Close()
+		}
+	}()
+
+	updated, results, err := h.workflow.UploadGalleryImages(c.Request().Context(), change.ID, user.ID, uploads)
+	if err != nil {
+		return h.writeChangeError(c, err)
+	}
+
+	uploadsResp := make([]util.Envelope, 0, len(results))
+	for _, item := range results {
+		uploadsResp = append(uploadsResp, util.Envelope{
+			"upload_id": item.UploadID,
+			"url":       item.URL,
+			"ordering":  item.Ordering,
+		})
+	}
+
+	return c.JSON(http.StatusOK, util.Envelope{
+		"change_request":  buildChangeResponse(updated),
+		"gallery_uploads": uploadsResp,
+	})
+}
+
 func (h *DestinationHandler) listPublished(c echo.Context) error {
 	if !h.features.View {
 		return c.JSON(http.StatusNotFound, util.Error("resource not found"))
@@ -419,6 +509,8 @@ func (h *DestinationHandler) writeChangeError(c echo.Context, err error) error {
 	case errors.Is(err, service.ErrDestinationChangeValidation):
 		return c.JSON(http.StatusBadRequest, util.Error(err.Error()))
 	case errors.Is(err, service.ErrHeroImageTooLarge), errors.Is(err, service.ErrHeroImageUnsupportedType), errors.Is(err, service.ErrHeroImageRequired):
+		return c.JSON(http.StatusBadRequest, util.Error(err.Error()))
+	case errors.Is(err, service.ErrGalleryImageTooLarge), errors.Is(err, service.ErrGalleryImageUnsupportedType), errors.Is(err, service.ErrGalleryImageRequired):
 		return c.JSON(http.StatusBadRequest, util.Error(err.Error()))
 	default:
 		return c.JSON(http.StatusInternalServerError, util.Error("internal error"))

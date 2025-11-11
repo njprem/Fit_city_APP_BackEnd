@@ -481,42 +481,76 @@ definitions:
         $ref: '#/definitions/http.Destination'
     type: object
   http.DestinationChangeFields:
+    description: Editable destination attributes supplied when creating or updating change drafts.
     properties:
-      category:
+      name:
+        description: Public display name for the destination.
+        example: Central Park
+        type: string
+      slug:
+        description: Optional URL-friendly slug; generated if omitted.
+        example: central-park
         type: string
       city:
+        description: City where the destination is located.
+        example: New York
         type: string
       country:
+        description: Country for the destination.
+        example: USA
+        type: string
+      category:
+        description: Free-form category label (e.g., Nature, Museum, Food).
+        example: Nature
         type: string
       description:
-        type: string
-      contact:
-        type: string
-      opening_time:
-        type: string
-      closing_time:
-        type: string
-      gallery:
-        items:
-          $ref: '#/definitions/http.DestinationMedia'
-        type: array
-      hard_delete:
-        type: boolean
-      hero_image_upload_id:
-        type: string
-      hero_image_url:
+        description: Visitor-facing description or highlights.
+        example: Iconic urban park with year-round programming.
         type: string
       latitude:
+        description: Decimal latitude for map placement.
+        example: 40.785091
         format: double
         type: number
       longitude:
+        description: Decimal longitude for map placement.
+        example: -73.968285
         format: double
         type: number
-      name:
+      contact:
+        description: Optional contact info (phone, email, or booking URL).
+        example: "+1 212-310-6600"
         type: string
-      slug:
+      opening_time:
+        description: Daily opening time in HH:MM (24h) format.
+        example: "06:00"
         type: string
+      closing_time:
+        description: Daily closing time in HH:MM (24h) format.
+        example: "22:00"
+        type: string
+      gallery:
+        description: Ordered gallery media to publish with the destination.
+        items:
+          $ref: '#/definitions/http.DestinationMedia'
+        type: array
+      hero_image_upload_id:
+        description: Temporary upload identifier returned from the hero upload endpoint.
+        example: 9c2d4ee5-32be-4f08-b4c0-f59196c6f36f
+        type: string
+      hero_image_url:
+        description: Fully-qualified URL to an existing hero image when reusing published media.
+        example: https://cdn.fitcity/destinations/central-park.jpg
+        type: string
+      published_hero_image:
+        description: (Read-only) currently published hero image URL; useful for draft diffs.
+        example: https://cdn.fitcity/destinations/central-park.jpg
+        type: string
+      hard_delete:
+        description: When true and action is delete, removes the destination permanently.
+        type: boolean
       status:
+        description: Desired publication status when approving the draft.
         enum:
         - draft
         - published
@@ -526,16 +560,33 @@ definitions:
   http.DestinationMedia:
     properties:
       url:
+        description: Publicly accessible image URL or CDN path.
         example: https://cdn.fitcity/destinations/central-park/gallery-1.jpg
         type: string
       caption:
+        description: Short description rendered under the image.
         example: Summer blooms near the lake
         type: string
       ordering:
+        description: Zero-based ordering for display.
         example: 1
         type: integer
     required:
     - url
+    type: object
+  http.GalleryUpload:
+    properties:
+      upload_id:
+        description: Temporary object storage key for the uploaded gallery asset.
+        example: destinations/changes/7b9f.../gallery/asset.jpg
+        type: string
+      url:
+        description: Public URL referencing the uploaded gallery media.
+        example: https://cdn.fitcity/destinations/changes/asset.jpg
+        type: string
+      ordering:
+        description: Suggested ordering offset applied when the upload was appended.
+        type: integer
     type: object
   http.DestinationChange:
     properties:
@@ -599,29 +650,50 @@ definitions:
         $ref: '#/definitions/http.PageMeta'
     type: object
   http.DestinationDraftRequest:
+    description: Payload for starting a destination change draft.
     properties:
       action:
+        description: Draft action indicates whether the change creates, updates, or deletes a destination.
         enum:
         - create
         - update
         - delete
         type: string
       destination_id:
+        description: Destination UUID; required for update and delete actions.
         type: string
       fields:
+        description: Field-level changes that should be applied once the draft is approved.
         $ref: '#/definitions/http.DestinationChangeFields'
     required:
     - action
+    example:
+      action: update
+      destination_id: 1da5f07d-7dcf-4aea-b948-7c9daa0a5db7
+      fields:
+        name: Central Park
+        city: New York
+        country: USA
+        status: draft
     type: object
   http.DestinationUpdateRequest:
+    description: Update an existing destination change draft. Fields are merged on the server.
     properties:
       draft_version:
+        description: Last known draft version to guard against lost updates.
         example: 2
         type: integer
       fields:
+        description: Updated destination fields to merge into the draft payload.
         $ref: '#/definitions/http.DestinationChangeFields'
     required:
     - draft_version
+    example:
+      draft_version: 3
+      fields:
+        description: Adds skating rink programming details.
+        opening_time: "06:00"
+        closing_time: "23:00"
     type: object
   http.DestinationRejectRequest:
     properties:
@@ -1455,6 +1527,46 @@ paths:
       security:
       - BearerAuth: []
       summary: Upload hero image for change request
+      tags:
+      - Admin Destinations
+  /admin/destination-changes/{id}/gallery:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload one or more optional gallery images for a draft change request. Uploaded URLs are appended to the draft payload.
+      parameters:
+      - description: Change request UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - collectionFormat: multi
+        description: Gallery image files (JPEG, PNG, or WebP)
+        in: formData
+        name: files
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: object
+            properties:
+              change_request:
+                $ref: '#/definitions/http.DestinationChange'
+              gallery_uploads:
+                items:
+                  $ref: '#/definitions/http.GalleryUpload'
+                type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Upload gallery images for change request
       tags:
       - Admin Destinations
   /destinations/{destination_id}/favorites/count:

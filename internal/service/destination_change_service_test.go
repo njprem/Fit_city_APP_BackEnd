@@ -430,6 +430,73 @@ func TestDestinationWorkflowService_Flows(t *testing.T) {
 			t.Fatalf("expected ErrDestinationChangeValidation, got %v", err)
 		}
 	})
+
+	t.Run("upload gallery images appends media", func(t *testing.T) {
+		change, err := service.CreateDraft(ctx, admin, DestinationDraftInput{
+			Action: domain.DestinationChangeActionCreate,
+			Fields: domain.DestinationChangeFields{
+				Name:     strPtr("Gallery Draft"),
+				Category: strPtr("Nature"),
+				Gallery: &domain.DestinationGallery{
+					{URL: "https://cdn.fitcity.local/existing.jpg", Ordering: 0},
+				},
+			},
+		})
+		if err != nil {
+			t.Fatalf("CreateDraft: %v", err)
+		}
+		uploads := []GalleryImageUpload{
+			{
+				Reader:      bytes.NewReader([]byte("image-one")),
+				Size:        int64(len([]byte("image-one"))),
+				FileName:    "one.jpg",
+				ContentType: "image/jpeg",
+			},
+			{
+				Reader:      bytes.NewReader([]byte("image-two")),
+				Size:        int64(len([]byte("image-two"))),
+				FileName:    "two.png",
+				ContentType: "image/png",
+			},
+		}
+		updated, results, err := service.UploadGalleryImages(ctx, change.ID, admin, uploads)
+		if err != nil {
+			t.Fatalf("UploadGalleryImages: %v", err)
+		}
+		if len(results) != 2 {
+			t.Fatalf("expected 2 upload results, got %d", len(results))
+		}
+		if updated.Payload.Gallery == nil || len(*updated.Payload.Gallery) != 3 {
+			t.Fatalf("expected gallery length 3, got %d", len(*updated.Payload.Gallery))
+		}
+		if (*updated.Payload.Gallery)[2].Ordering != 2 {
+			t.Fatalf("expected last ordering 2, got %d", (*updated.Payload.Gallery)[2].Ordering)
+		}
+	})
+
+	t.Run("upload gallery images rejects unauthorized user", func(t *testing.T) {
+		change, err := service.CreateDraft(ctx, admin, DestinationDraftInput{
+			Action: domain.DestinationChangeActionCreate,
+			Fields: domain.DestinationChangeFields{
+				Name:     strPtr("Unauthorized Gallery"),
+				Category: strPtr("Nature"),
+			},
+		})
+		if err != nil {
+			t.Fatalf("CreateDraft: %v", err)
+		}
+		_, _, err = service.UploadGalleryImages(ctx, change.ID, uuid.New(), []GalleryImageUpload{
+			{
+				Reader:      bytes.NewReader([]byte("image-one")),
+				Size:        int64(len([]byte("image-one"))),
+				FileName:    "one.jpg",
+				ContentType: "image/jpeg",
+			},
+		})
+		if !errors.Is(err, ErrForbidden) {
+			t.Fatalf("expected ErrForbidden, got %v", err)
+		}
+	})
 }
 
 // --- memory repositories for testing ---
@@ -894,14 +961,14 @@ func cloneDestination(src *domain.Destination) *domain.Destination {
 	dest.Contact = copyStringPtr(src.Contact)
 	dest.OpeningTime = copyStringPtr(src.OpeningTime)
 	dest.ClosingTime = copyStringPtr(src.ClosingTime)
-	dest.Gallery = cloneGallery(src.Gallery)
+	dest.Gallery = cloneGalleryTest(src.Gallery)
 	dest.HeroImage = copyStringPtr(src.HeroImage)
 	dest.UpdatedBy = copyUUIDPtr(src.UpdatedBy)
 	dest.DeletedAt = copyTimePtr(src.DeletedAt)
 	return &dest
 }
 
-func cloneGallery(src domain.DestinationGallery) domain.DestinationGallery {
+func cloneGalleryTest(src domain.DestinationGallery) domain.DestinationGallery {
 	if src == nil {
 		return nil
 	}
@@ -926,14 +993,14 @@ func copyGalleryValue(src *domain.DestinationGallery) domain.DestinationGallery 
 	if src == nil {
 		return nil
 	}
-	return cloneGallery(*src)
+	return cloneGalleryTest(*src)
 }
 
 func copyGalleryPtr(src *domain.DestinationGallery) *domain.DestinationGallery {
 	if src == nil {
 		return nil
 	}
-	cloned := cloneGallery(*src)
+	cloned := cloneGalleryTest(*src)
 	return &cloned
 }
 

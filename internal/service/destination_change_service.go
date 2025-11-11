@@ -29,6 +29,9 @@ var (
 	ErrDestinationChangeValidation = errors.New("destination change validation failed")
 	ErrHeroImageTooLarge           = errors.New("hero image exceeds maximum size")
 	ErrHeroImageUnsupportedType    = errors.New("unsupported hero image content type")
+	ErrGalleryImageRequired        = errors.New("gallery image required")
+	ErrGalleryImageTooLarge        = errors.New("gallery image exceeds maximum size")
+	ErrGalleryImageUnsupportedType = errors.New("unsupported gallery image content type")
 	ErrChangeAlreadyProcessed      = errors.New("change request already processed")
 	errDefaultImageContentType     = "image/jpeg"
 	supportedImageTypes            = map[string]struct{}{
@@ -45,6 +48,19 @@ type HeroImageUpload struct {
 	Size        int64
 	FileName    string
 	ContentType string
+}
+
+type GalleryImageUpload struct {
+	Reader      io.Reader
+	Size        int64
+	FileName    string
+	ContentType string
+}
+
+type GalleryUploadResult struct {
+	UploadID string
+	URL      string
+	Ordering int
 }
 
 type DestinationDraftInput struct {
@@ -333,6 +349,92 @@ func (s *DestinationWorkflowService) UploadHeroImage(ctx context.Context, change
 	return s.changes.Update(ctx, change)
 }
 
+func (s *DestinationWorkflowService) UploadGalleryImages(ctx context.Context, changeID uuid.UUID, authorID uuid.UUID, uploads []GalleryImageUpload) (*domain.DestinationChangeRequest, []GalleryUploadResult, error) {
+	if len(uploads) == 0 {
+		return nil, nil, ErrGalleryImageRequired
+	}
+
+	change, err := s.changes.FindByID(ctx, changeID)
+	if err != nil {
+		return nil, nil, ErrDestinationChangeNotFound
+	}
+	if change.SubmittedBy != authorID {
+		return nil, nil, ErrForbidden
+	}
+	if change.Status != domain.DestinationChangeStatusDraft && change.Status != domain.DestinationChangeStatusRejected {
+		return nil, nil, ErrChangeNotEditable
+	}
+
+	existing := domain.DestinationGallery(nil)
+	if change.Payload.Gallery != nil {
+		existing = cloneGallery(*change.Payload.Gallery)
+	}
+	baseOrdering := len(existing)
+	results := make([]GalleryUploadResult, 0, len(uploads))
+
+	for idx, upload := range uploads {
+		if upload.Reader == nil || upload.Size <= 0 {
+			return nil, nil, ErrGalleryImageRequired
+		}
+		if upload.Size > s.imageMaxBytes {
+			return nil, nil, ErrGalleryImageTooLarge
+		}
+		contentType := strings.TrimSpace(upload.ContentType)
+		if contentType == "" {
+			contentType = mime.TypeByExtension(filepath.Ext(upload.FileName))
+		}
+		if contentType == "" {
+			contentType = errDefaultImageContentType
+		}
+		if _, ok := supportedImageTypes[contentType]; !ok {
+			return nil, nil, ErrGalleryImageUnsupportedType
+		}
+
+		exts, _ := mime.ExtensionsByType(contentType)
+		ext := ".img"
+		if len(exts) > 0 {
+			ext = exts[0]
+		} else if fileExt := filepath.Ext(upload.FileName); fileExt != "" {
+			ext = fileExt
+		}
+
+		objectName := fmt.Sprintf("destinations/changes/%s/gallery/%s%s", changeID.String(), uuid.NewString(), ext)
+		publicURL, err := s.storage.Upload(ctx, s.bucket, objectName, contentType, upload.Reader, upload.Size)
+		if err != nil {
+			return nil, nil, err
+		}
+		if s.publicBase != "" {
+			publicURL = strings.TrimRight(s.publicBase, "/") + "/" + strings.TrimLeft(objectName, "/")
+		}
+
+		ordering := baseOrdering + idx
+		existing = append(existing, domain.DestinationMedia{
+			URL:      publicURL,
+			Ordering: ordering,
+		})
+		results = append(results, GalleryUploadResult{
+			UploadID: objectName,
+			URL:      publicURL,
+			Ordering: ordering,
+		})
+	}
+
+	if len(existing) == 0 {
+		change.Payload.Gallery = nil
+	} else {
+		cloned := cloneGallery(existing)
+		change.Payload.Gallery = &cloned
+	}
+	change.UpdatedAt = s.now()
+	change.DraftVersion++
+
+	updated, err := s.changes.Update(ctx, change)
+	if err != nil {
+		return nil, nil, err
+	}
+	return updated, results, nil
+}
+
 func (s *DestinationWorkflowService) validateDraftInput(ctx context.Context, authorID uuid.UUID, input DestinationDraftInput, creating bool) error {
 	if input.Action != domain.DestinationChangeActionCreate &&
 		input.Action != domain.DestinationChangeActionUpdate &&
@@ -608,4 +710,25 @@ func stringPtr(v string) *string {
 		return nil
 	}
 	return &v
+}
+
+func cloneGallery(src domain.DestinationGallery) domain.DestinationGallery {
+	if src == nil {
+		return nil
+	}
+	if len(src) == 0 {
+		return domain.DestinationGallery{}
+	}
+	out := make(domain.DestinationGallery, len(src))
+	for i := range src {
+		out[i] = domain.DestinationMedia{
+			URL:      src[i].URL,
+			Ordering: src[i].Ordering,
+		}
+		if src[i].Caption != nil {
+			caption := *src[i].Caption
+			out[i].Caption = &caption
+		}
+	}
+	return out
 }
