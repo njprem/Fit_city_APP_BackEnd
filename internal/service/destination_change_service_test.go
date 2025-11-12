@@ -499,6 +499,63 @@ func TestDestinationWorkflowService_Flows(t *testing.T) {
 	})
 }
 
+func TestDestinationWorkflowService_UploadHeroImageUsesProcessor(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now()
+
+	destRepo := newMemoryDestinationRepo(now)
+	changeRepo := newMemoryChangeRepo()
+	versionRepo := newMemoryVersionRepo()
+	storage := &memoryStorage{}
+	processor := &stubImageProcessor{output: []byte("processed-by-ffmpeg"), contentType: "image/png"}
+
+	service := NewDestinationWorkflowService(destRepo, changeRepo, versionRepo, storage, DestinationWorkflowConfig{
+		Bucket:            "fitcity-destinations",
+		PublicBaseURL:     "https://cdn.example.com/destinations",
+		ImageMaxBytes:     5 * 1024 * 1024,
+		AllowedCategories: []string{"Nature"},
+		ImageProcessor:    processor,
+	})
+	service.SetClock(func() time.Time { return now })
+
+	author := uuid.New()
+	draft, err := service.CreateDraft(ctx, author, DestinationDraftInput{
+		Action: domain.DestinationChangeActionCreate,
+		Fields: domain.DestinationChangeFields{
+			Name:        strPtr("Sample"),
+			Category:    strPtr("Nature"),
+			Description: strPtr("desc"),
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateDraft: %v", err)
+	}
+
+	imageData := []byte("original-image")
+	updated, err := service.UploadHeroImage(ctx, draft.ID, author, HeroImageUpload{
+		Reader:      bytes.NewReader(imageData),
+		Size:        int64(len(imageData)),
+		FileName:    "hero.png",
+		ContentType: "image/png",
+	})
+	if err != nil {
+		t.Fatalf("UploadHeroImage: %v", err)
+	}
+	if processor.calls != 1 {
+		t.Fatalf("expected processor to run once, got %d", processor.calls)
+	}
+	if updated.HeroImageTempKey == nil {
+		t.Fatalf("expected hero image key to be set")
+	}
+	stored, ok := storage.objects.Load(*updated.HeroImageTempKey)
+	if !ok {
+		t.Fatalf("expected object %s to exist in storage", *updated.HeroImageTempKey)
+	}
+	if !bytes.Equal(stored.([]byte), []byte("processed-by-ffmpeg")) {
+		t.Fatalf("expected processed bytes to be uploaded, got %q", stored)
+	}
+}
+
 // --- memory repositories for testing ---
 
 type memoryDestinationRepo struct {

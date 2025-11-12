@@ -17,6 +17,7 @@ import (
 	"google.golang.org/api/idtoken"
 
 	"github.com/njprem/Fit_city_APP_BackEnd/internal/domain"
+	"github.com/njprem/Fit_city_APP_BackEnd/internal/media"
 	"github.com/njprem/Fit_city_APP_BackEnd/internal/repository/ports"
 	"github.com/njprem/Fit_city_APP_BackEnd/internal/util"
 )
@@ -59,44 +60,51 @@ type AuthResult struct {
 }
 
 type AuthService struct {
-	users           ports.UserRepository
-	roles           ports.RoleRepository
-	sessions        ports.SessionRepository
-	passwordResets  ports.PasswordResetRepository
-	storage         ports.ObjectStorage
-	jwt             *util.JWTManager
-	googleAudience  string
-	profileBucket   string
-	defaultRoleName string
-	adminRoleName   string
-	httpClient      httpDoer
-	mailer          PasswordResetSender
-	resetTTL        time.Duration
-	otpLength       int
+	users                    ports.UserRepository
+	roles                    ports.RoleRepository
+	sessions                 ports.SessionRepository
+	passwordResets           ports.PasswordResetRepository
+	storage                  ports.ObjectStorage
+	jwt                      *util.JWTManager
+	googleAudience           string
+	profileBucket            string
+	defaultRoleName          string
+	adminRoleName            string
+	httpClient               httpDoer
+	mailer                   PasswordResetSender
+	resetTTL                 time.Duration
+	otpLength                int
+	imageProcessor           media.Processor
+	profileImageMaxDimension int
 }
 
-func NewAuthService(users ports.UserRepository, roles ports.RoleRepository, sessions ports.SessionRepository, resets ports.PasswordResetRepository, storage ports.ObjectStorage, mailer PasswordResetSender, jwtManager *util.JWTManager, googleAudience, profileBucket string, resetTTL time.Duration, otpLength int) *AuthService {
+func NewAuthService(users ports.UserRepository, roles ports.RoleRepository, sessions ports.SessionRepository, resets ports.PasswordResetRepository, storage ports.ObjectStorage, mailer PasswordResetSender, jwtManager *util.JWTManager, googleAudience, profileBucket string, resetTTL time.Duration, otpLength int, processor media.Processor, profileImageMaxDimension int) *AuthService {
 	if resetTTL <= 0 {
 		resetTTL = 15 * time.Minute
 	}
 	if otpLength <= 0 {
 		otpLength = defaultOTPLength
 	}
+	if profileImageMaxDimension <= 0 {
+		profileImageMaxDimension = 400
+	}
 	return &AuthService{
-		users:           users,
-		roles:           roles,
-		sessions:        sessions,
-		passwordResets:  resets,
-		storage:         storage,
-		jwt:             jwtManager,
-		googleAudience:  googleAudience,
-		profileBucket:   profileBucket,
-		defaultRoleName: "user",
-		adminRoleName:   "admin",
-		httpClient:      &http.Client{Timeout: 10 * time.Second},
-		mailer:          mailer,
-		resetTTL:        resetTTL,
-		otpLength:       otpLength,
+		users:                    users,
+		roles:                    roles,
+		sessions:                 sessions,
+		passwordResets:           resets,
+		storage:                  storage,
+		jwt:                      jwtManager,
+		googleAudience:           googleAudience,
+		profileBucket:            profileBucket,
+		defaultRoleName:          "user",
+		adminRoleName:            "admin",
+		httpClient:               &http.Client{Timeout: 10 * time.Second},
+		mailer:                   mailer,
+		resetTTL:                 resetTTL,
+		otpLength:                otpLength,
+		imageProcessor:           processor,
+		profileImageMaxDimension: profileImageMaxDimension,
 	}
 }
 
@@ -365,7 +373,16 @@ func (s *AuthService) CompleteProfile(ctx context.Context, userID uuid.UUID, ful
 		if ext := sanitizeExt(image.FileName); ext != "" {
 			objectName += ext
 		}
-		url, err := s.storage.Upload(ctx, s.profileBucket, objectName, image.ContentType, image.Reader, image.Size)
+		reader, size, contentType, err := prepareImageForUpload(ctx, s.imageProcessor, media.Upload{
+			Reader:      image.Reader,
+			Size:        image.Size,
+			FileName:    image.FileName,
+			ContentType: image.ContentType,
+		}, s.profileImageMaxDimension)
+		if err != nil {
+			return nil, err
+		}
+		url, err := s.storage.Upload(ctx, s.profileBucket, objectName, contentType, reader, size)
 		if err != nil {
 			return nil, err
 		}
@@ -424,12 +441,22 @@ func (s *AuthService) cacheGoogleProfileImage(ctx context.Context, userID uuid.U
 		contentType = "application/octet-stream"
 	}
 
+	reader, size, resolvedType, err := prepareImageForUpload(ctx, s.imageProcessor, media.Upload{
+		Reader:      bytes.NewReader(data),
+		Size:        int64(len(data)),
+		ContentType: contentType,
+	}, s.profileImageMaxDimension)
+	if err != nil {
+		return nil, err
+	}
+	contentType = resolvedType
+
 	objectName := fmt.Sprintf("profiles/%s/google/%d", userID.String(), time.Now().UnixNano())
 	if ext := extensionFromContentType(contentType); ext != "" {
 		objectName += ext
 	}
 
-	uploadURL, err := s.storage.Upload(ctx, s.profileBucket, objectName, contentType, bytes.NewReader(data), int64(len(data)))
+	uploadURL, err := s.storage.Upload(ctx, s.profileBucket, objectName, contentType, reader, size)
 	if err != nil {
 		return nil, err
 	}

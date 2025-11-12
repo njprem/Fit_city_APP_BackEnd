@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"sort"
-	"strings"
 	"testing"
 	"time"
 
@@ -109,6 +108,48 @@ func TestReviewService_CreateReview_ValidationErrors(t *testing.T) {
 	})
 	if !errors.Is(err, ErrReviewValidation) {
 		t.Fatalf("expected ErrReviewValidation for unsupported image type, got %v", err)
+	}
+}
+
+func TestReviewService_CreateReviewProcessesImages(t *testing.T) {
+	ctx := context.Background()
+	destID := uuid.New()
+	userID := uuid.New()
+
+	repo := newMemoryReviewRepository()
+	mediaRepo := newMemoryMediaRepository()
+	destRepo := &reviewDestinationRepo{
+		items: map[uuid.UUID]*domain.Destination{
+			destID: {ID: destID, Status: domain.DestinationStatusPublished},
+		},
+	}
+	storage := &reviewStorage{}
+	processor := &stubImageProcessor{output: []byte("processed-review-image")}
+
+	svc := NewReviewService(repo, mediaRepo, destRepo, storage, ReviewServiceConfig{
+		Bucket:         "fitcity-reviews",
+		ImageProcessor: processor,
+	})
+
+	title := "Trip"
+	image := ReviewImageUpload{
+		Reader:      bytes.NewReader([]byte("original-review-image")),
+		Size:        int64(len("original-review-image")),
+		FileName:    "review.jpg",
+		ContentType: "image/jpeg",
+	}
+
+	if _, _, err := svc.CreateReview(ctx, userID, destID, ReviewCreateInput{Rating: 5, Title: &title, Images: []ReviewImageUpload{image}}); err != nil {
+		t.Fatalf("CreateReview returned error: %v", err)
+	}
+	if processor.calls != 1 {
+		t.Fatalf("expected processor to be invoked once, got %d", processor.calls)
+	}
+	if storage.uploads != 1 {
+		t.Fatalf("expected one upload, got %d", storage.uploads)
+	}
+	if string(storage.lastData) != "processed-review-image" {
+		t.Fatalf("expected processed bytes to be uploaded, got %q", storage.lastData)
 	}
 }
 
@@ -375,13 +416,20 @@ func (m *memoryMediaRepository) ListByReviewIDs(_ context.Context, reviewIDs []u
 	return result, nil
 }
 
-type reviewStorage struct{}
+type reviewStorage struct {
+	lastObject string
+	lastData   []byte
+	uploads    int
+}
 
-func (reviewStorage) Upload(_ context.Context, _ string, objectName, _ string, reader io.Reader, _ int64) (string, error) {
-	buf := new(strings.Builder)
+func (s *reviewStorage) Upload(_ context.Context, _ string, objectName, _ string, reader io.Reader, _ int64) (string, error) {
+	buf := new(bytes.Buffer)
 	if _, err := io.Copy(buf, reader); err != nil {
 		return "", err
 	}
+	s.lastObject = objectName
+	s.lastData = buf.Bytes()
+	s.uploads++
 	return "https://example.com/" + objectName, nil
 }
 

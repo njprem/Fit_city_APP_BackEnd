@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/njprem/Fit_city_APP_BackEnd/internal/domain"
+	"github.com/njprem/Fit_city_APP_BackEnd/internal/media"
 	"github.com/njprem/Fit_city_APP_BackEnd/internal/repository/ports"
 )
 
@@ -23,10 +24,12 @@ var (
 )
 
 type ReviewServiceConfig struct {
-	Bucket           string
-	MaxImages        int
-	MaxImageBytes    int64
-	AllowedMIMETypes []string
+	Bucket            string
+	MaxImages         int
+	MaxImageBytes     int64
+	AllowedMIMETypes  []string
+	ImageProcessor    media.Processor
+	ImageMaxDimension int
 }
 
 type ReviewImageUpload struct {
@@ -50,11 +53,13 @@ type ReviewService struct {
 	destinations ports.DestinationRepository
 	storage      ports.ObjectStorage
 
-	bucket        string
-	maxImages     int
-	maxImageBytes int64
-	allowedMIMEs  map[string]struct{}
-	now           func() time.Time
+	bucket            string
+	maxImages         int
+	maxImageBytes     int64
+	allowedMIMEs      map[string]struct{}
+	now               func() time.Time
+	imageProcessor    media.Processor
+	imageMaxDimension int
 }
 
 const (
@@ -70,7 +75,7 @@ var defaultAllowedMIMEs = []string{
 
 func NewReviewService(
 	reviews ports.ReviewRepository,
-	media ports.ReviewMediaRepository,
+	mediaRepo ports.ReviewMediaRepository,
 	destinations ports.DestinationRepository,
 	storage ports.ObjectStorage,
 	cfg ReviewServiceConfig,
@@ -92,16 +97,23 @@ func NewReviewService(
 		mimeSet[strings.ToLower(strings.TrimSpace(mt))] = struct{}{}
 	}
 
+	maxDimension := cfg.ImageMaxDimension
+	if maxDimension <= 0 {
+		maxDimension = media.DefaultMaxDimension
+	}
+
 	return &ReviewService{
-		reviews:       reviews,
-		media:         media,
-		destinations:  destinations,
-		storage:       storage,
-		bucket:        strings.TrimSpace(cfg.Bucket),
-		maxImages:     maxImages,
-		maxImageBytes: maxBytes,
-		allowedMIMEs:  mimeSet,
-		now:           time.Now,
+		reviews:           reviews,
+		media:             mediaRepo,
+		destinations:      destinations,
+		storage:           storage,
+		bucket:            strings.TrimSpace(cfg.Bucket),
+		maxImages:         maxImages,
+		maxImageBytes:     maxBytes,
+		allowedMIMEs:      mimeSet,
+		now:               time.Now,
+		imageProcessor:    cfg.ImageProcessor,
+		imageMaxDimension: maxDimension,
 	}
 }
 
@@ -325,7 +337,17 @@ func (s *ReviewService) uploadMedia(ctx context.Context, destinationID, reviewID
 		ext := safeImageExtension(image.ContentType, image.FileName)
 		objectKey := fmt.Sprintf("reviews/%s/%s/%s_%d%s", destinationID.String(), reviewID.String(), now.UTC().Format("20060102T150405Z0700"), idx, ext)
 
-		url, err := s.storage.Upload(ctx, s.bucket, objectKey, image.ContentType, image.Reader, image.Size)
+		reader, size, contentType, err := prepareImageForUpload(ctx, s.imageProcessor, media.Upload{
+			Reader:      image.Reader,
+			Size:        image.Size,
+			FileName:    image.FileName,
+			ContentType: image.ContentType,
+		}, s.imageMaxDimension)
+		if err != nil {
+			return nil, err
+		}
+
+		url, err := s.storage.Upload(ctx, s.bucket, objectKey, contentType, reader, size)
 		if err != nil {
 			return nil, err
 		}

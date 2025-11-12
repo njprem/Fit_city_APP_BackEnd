@@ -18,6 +18,7 @@ import (
 
 	"github.com/njprem/Fit_city_APP_BackEnd/internal/config"
 	"github.com/njprem/Fit_city_APP_BackEnd/internal/logging"
+	"github.com/njprem/Fit_city_APP_BackEnd/internal/media"
 	minioRepo "github.com/njprem/Fit_city_APP_BackEnd/internal/repository/minio"
 	"github.com/njprem/Fit_city_APP_BackEnd/internal/repository/postgres"
 	"github.com/njprem/Fit_city_APP_BackEnd/internal/service"
@@ -49,6 +50,7 @@ func main() {
 		log.Fatalf("minio client: %v", err)
 	}
 	objectStorage := minioRepo.NewStorage(minioClient, cfg.MinIOPublicURL)
+	imageProcessor := media.NewFFMPEGProcessor(cfg.FFMPEGPath, cfg.ImageMaxDimension)
 
 	sessionTTL, err := time.ParseDuration(cfg.SessionTTL)
 	if err != nil {
@@ -74,7 +76,7 @@ func main() {
 		resetMailer = mail.NewPasswordResetMailer(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPFrom, cfg.SMTPUseTLS)
 	}
 
-	authService := service.NewAuthService(userRepo, roleRepo, sessionRepo, passwordResetRepo, objectStorage, resetMailer, jwtManager, cfg.GoogleAudience, cfg.MinIOBucketProfile, resetTTL, cfg.PasswordResetOTPLength)
+	authService := service.NewAuthService(userRepo, roleRepo, sessionRepo, passwordResetRepo, objectStorage, resetMailer, jwtManager, cfg.GoogleAudience, cfg.MinIOBucketProfile, resetTTL, cfg.PasswordResetOTPLength, imageProcessor, cfg.ProfileImageMaxDimension)
 
 	destinationRepo := postgres.NewDestinationRepo(db)
 	destinationChangeRepo := postgres.NewDestinationChangeRepo(db)
@@ -97,9 +99,11 @@ func main() {
 			Bucket:            cfg.MinIOBucketDestinations,
 			PublicBaseURL:     destinationPublicBase,
 			ImageMaxBytes:     cfg.DestinationImageMaxBytes,
+			ImageMaxDimension: cfg.ImageMaxDimension,
 			AllowedCategories: cfg.DestinationAllowedCategories,
 			ApprovalRequired:  cfg.DestinationApprovalRequired,
 			HardDeleteAllowed: cfg.DestinationHardDeleteAllowed,
+			ImageProcessor:    imageProcessor,
 		},
 	)
 
@@ -110,8 +114,10 @@ func main() {
 		destinationRepo,
 		objectStorage,
 		service.ReviewServiceConfig{
-			Bucket:        cfg.MinIOBucketReviews,
-			MaxImageBytes: cfg.DestinationImageMaxBytes,
+			Bucket:            cfg.MinIOBucketReviews,
+			MaxImageBytes:     cfg.DestinationImageMaxBytes,
+			ImageProcessor:    imageProcessor,
+			ImageMaxDimension: cfg.ImageMaxDimension,
 		},
 	)
 	favoriteService := service.NewFavoriteService(favoriteRepo, destinationRepo)

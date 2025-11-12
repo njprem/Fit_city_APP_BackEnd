@@ -35,6 +35,8 @@ type Config struct {
 	PasswordResetTTL             string
 	PasswordResetOTPLength       int
 	DestinationImageMaxBytes     int64
+	ImageMaxDimension            int
+	ProfileImageMaxDimension     int
 	DestinationAllowedCategories []string
 	EnableDestinationView        bool
 	EnableDestinationCreate      bool
@@ -42,7 +44,11 @@ type Config struct {
 	EnableDestinationDelete      bool
 	DestinationHardDeleteAllowed bool
 	DestinationApprovalRequired  bool
+	FFMPEGPath                   string
 }
+
+const defaultImageMaxDimension = 3840
+const defaultProfileImageMaxDimension = 400
 
 func Load() Config {
 	if err := godotenv.Load(); err != nil {
@@ -57,6 +63,15 @@ func Load() Config {
 	imageMax := int64(5 * 1024 * 1024)
 	if v, err := strconv.ParseInt(getenv("DESTINATION_IMAGE_MAX_BYTES", "5242880"), 10, 64); err == nil && v > 0 {
 		imageMax = v
+	}
+
+	maxDimension := defaultImageMaxDimension
+	if v, err := strconv.Atoi(getenv("IMAGE_MAX_DIMENSION", strconv.Itoa(defaultImageMaxDimension))); err == nil && v > 0 {
+		maxDimension = v
+	}
+	profileMaxDimension := defaultProfileImageMaxDimension
+	if v, err := strconv.Atoi(getenv("PROFILE_IMAGE_MAX_DIMENSION", strconv.Itoa(defaultProfileImageMaxDimension))); err == nil && v > 0 {
+		profileMaxDimension = v
 	}
 
 	rawCategories := getenv("DESTINATION_ALLOWED_CATEGORIES", "")
@@ -91,6 +106,8 @@ func Load() Config {
 		PasswordResetTTL:             getenv("PASSWORD_RESET_TTL", "15m"),
 		PasswordResetOTPLength:       otpLen,
 		DestinationImageMaxBytes:     imageMax,
+		ImageMaxDimension:            maxDimension,
+		ProfileImageMaxDimension:     profileMaxDimension,
 		DestinationAllowedCategories: allowedCategories,
 		EnableDestinationView:        getenv("ENABLE_DESTINATION_VIEW", "true") == "true",
 		EnableDestinationCreate:      getenv("ENABLE_DESTINATION_CREATE", "true") == "true",
@@ -98,6 +115,7 @@ func Load() Config {
 		EnableDestinationDelete:      getenv("ENABLE_DESTINATION_DELETE", "true") == "true",
 		DestinationHardDeleteAllowed: getenv("DESTINATION_HARD_DELETE_ALLOWED", "false") == "true",
 		DestinationApprovalRequired:  getenv("DESTINATION_APPROVAL_REQUIRED", "true") == "true",
+		FFMPEGPath:                   getenv("FFMPEG_PATH", "ffmpeg"),
 	}
 }
 

@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/njprem/Fit_city_APP_BackEnd/internal/domain"
+	"github.com/njprem/Fit_city_APP_BackEnd/internal/media"
 	"github.com/njprem/Fit_city_APP_BackEnd/internal/repository/ports"
 )
 
@@ -73,9 +74,11 @@ type DestinationWorkflowConfig struct {
 	Bucket            string
 	PublicBaseURL     string
 	ImageMaxBytes     int64
+	ImageMaxDimension int
 	AllowedCategories []string
 	ApprovalRequired  bool
 	HardDeleteAllowed bool
+	ImageProcessor    media.Processor
 }
 
 type DestinationWorkflowService struct {
@@ -87,10 +90,12 @@ type DestinationWorkflowService struct {
 	bucket            string
 	publicBase        string
 	imageMaxBytes     int64
+	imageMaxDimension int
 	allowedCategories map[string]struct{}
 	approvalRequired  bool
 	hardDeleteAllowed bool
 	now               func() time.Time
+	imageProcessor    media.Processor
 }
 
 func NewDestinationWorkflowService(destRepo ports.DestinationRepository, changeRepo ports.DestinationChangeRepository, versionRepo ports.DestinationVersionRepository, storage ports.ObjectStorage, cfg DestinationWorkflowConfig) *DestinationWorkflowService {
@@ -106,6 +111,10 @@ func NewDestinationWorkflowService(destRepo ports.DestinationRepository, changeR
 		imageMax = 5 * 1024 * 1024
 	}
 	publicBase := strings.TrimRight(cfg.PublicBaseURL, "/")
+	maxDimension := cfg.ImageMaxDimension
+	if maxDimension <= 0 {
+		maxDimension = media.DefaultMaxDimension
+	}
 
 	return &DestinationWorkflowService{
 		destinations:      destRepo,
@@ -115,10 +124,12 @@ func NewDestinationWorkflowService(destRepo ports.DestinationRepository, changeR
 		bucket:            cfg.Bucket,
 		publicBase:        publicBase,
 		imageMaxBytes:     imageMax,
+		imageMaxDimension: maxDimension,
 		allowedCategories: allowed,
 		approvalRequired:  cfg.ApprovalRequired,
 		hardDeleteAllowed: cfg.HardDeleteAllowed,
 		now:               time.Now,
+		imageProcessor:    cfg.ImageProcessor,
 	}
 }
 
@@ -332,7 +343,17 @@ func (s *DestinationWorkflowService) UploadHeroImage(ctx context.Context, change
 	}
 
 	objectName := fmt.Sprintf("destinations/changes/%s/%s%s", changeID.String(), uuid.NewString(), ext)
-	publicURL, err := s.storage.Upload(ctx, s.bucket, objectName, contentType, image.Reader, image.Size)
+	reader, size, contentType, err := prepareImageForUpload(ctx, s.imageProcessor, media.Upload{
+		Reader:      image.Reader,
+		Size:        image.Size,
+		FileName:    image.FileName,
+		ContentType: contentType,
+	}, s.imageMaxDimension)
+	if err != nil {
+		return nil, err
+	}
+
+	publicURL, err := s.storage.Upload(ctx, s.bucket, objectName, contentType, reader, size)
 	if err != nil {
 		return nil, err
 	}
@@ -399,7 +420,17 @@ func (s *DestinationWorkflowService) UploadGalleryImages(ctx context.Context, ch
 		}
 
 		objectName := fmt.Sprintf("destinations/changes/%s/gallery/%s%s", changeID.String(), uuid.NewString(), ext)
-		publicURL, err := s.storage.Upload(ctx, s.bucket, objectName, contentType, upload.Reader, upload.Size)
+		reader, size, contentType, err := prepareImageForUpload(ctx, s.imageProcessor, media.Upload{
+			Reader:      upload.Reader,
+			Size:        upload.Size,
+			FileName:    upload.FileName,
+			ContentType: contentType,
+		}, s.imageMaxDimension)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		publicURL, err := s.storage.Upload(ctx, s.bucket, objectName, contentType, reader, size)
 		if err != nil {
 			return nil, nil, err
 		}

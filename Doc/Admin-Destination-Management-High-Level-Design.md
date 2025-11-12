@@ -171,6 +171,33 @@ sequenceDiagram
     H-->>Rev: 200 {"message":"Destination updated successfully","destination":{...}}
 ```
 
+### 7.3 Draft State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> draft
+    draft --> draft : Save draft\n(POST/PUT)
+    draft --> pending_review : Submit for review
+    pending_review --> approved : Reviewer approves
+    pending_review --> rejected : Reviewer rejects
+    rejected --> draft : Author edits\n& resubmits
+    approved --> [*]
+```
+
+**State descriptions**
+
+| State | Who owns it | Allowed transitions | Notes |
+| --- | --- | --- | --- |
+| `draft` | Author | Save (stay `draft`), Submit → `pending_review` | Editable; hero/gallery uploads append to payload while in this state. |
+| `pending_review` | Reviewer queue | Approve → `approved`, Reject → `rejected` | Locked for editing; submitter cannot approve their own change. |
+| `approved` | System | — | Change is applied to `travel_destination`, version recorded, request becomes immutable. |
+| `rejected` | Author | Update fields → `draft`, Resubmit → `pending_review` | Request stays editable; reviewer message stored for context. |
+
+Additional rules:
+- Delete actions follow the same state machine; approval either archives or hard-deletes depending on payload.
+- Hero/gallery uploads are only permitted while the change is in `draft` or `rejected`.
+- Any attempt to submit or upload when the request is not editable (`pending_review`/`approved`) results in `409` (`ErrChangeNotEditable`).
+
 ## 8. Data Model & Storage Updates
 
 ### 8.1 `travel_destination`

@@ -212,18 +212,28 @@ type fakeStorage struct {
 		objectName  string
 		contentType string
 		size        int64
+		data        []byte
 	}
 	url string
 	err error
 }
 
 func (f *fakeStorage) Upload(ctx context.Context, bucket, objectName, contentType string, reader io.Reader, size int64) (string, error) {
+	var payload []byte
+	if reader != nil {
+		buf := new(bytes.Buffer)
+		if _, err := io.Copy(buf, reader); err != nil {
+			return "", err
+		}
+		payload = buf.Bytes()
+	}
 	f.uploaded = append(f.uploaded, struct {
 		bucket      string
 		objectName  string
 		contentType string
 		size        int64
-	}{bucket: bucket, objectName: objectName, contentType: contentType, size: size})
+		data        []byte
+	}{bucket: bucket, objectName: objectName, contentType: contentType, size: size, data: payload})
 	if f.err != nil {
 		return "", f.err
 	}
@@ -371,7 +381,7 @@ func newAuthServiceForTests(user *fakeUserRepo, role *fakeRoleRepo, session *fak
 		resets = &fakePasswordResetRepo{}
 	}
 	jwtManager := util.NewJWTManager("test-secret", time.Hour)
-	svc := NewAuthService(user, role, session, resets, storage, mailer, jwtManager, "google-audience", "profile-bucket", 15*time.Minute, 6)
+	svc := NewAuthService(user, role, session, resets, storage, mailer, jwtManager, "google-audience", "profile-bucket", 15*time.Minute, 6, nil, 400)
 	svc.httpClient = &fakeHTTPClient{resp: &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader([]byte{})), Header: http.Header{}}}
 	return svc
 }
@@ -816,6 +826,39 @@ func TestCompleteProfileUploadAndNormalize(t *testing.T) {
 	}
 	if result.ImageURL == nil || *result.ImageURL != storage.url {
 		t.Fatalf("expected returned user to include storage url")
+	}
+}
+
+func TestCompleteProfileUsesImageProcessor(t *testing.T) {
+	userID := uuid.New()
+	storage := &fakeStorage{}
+	userRepo := &fakeUserRepo{updateProfileResult: &domain.User{ID: userID}}
+	svc := newAuthServiceForTests(userRepo, &fakeRoleRepo{}, &fakeSessionRepo{}, storage, nil, nil)
+
+	processor := &stubImageProcessor{output: []byte("processed")}
+	svc.imageProcessor = processor
+
+	fullName := "Name"
+	username := "user"
+	payload := "rawdata"
+	profileImage := &ProfileImage{
+		Reader:      strings.NewReader(payload),
+		Size:        int64(len(payload)),
+		FileName:    "avatar.jpg",
+		ContentType: "image/jpeg",
+	}
+
+	if _, err := svc.CompleteProfile(context.Background(), userID, &fullName, &username, profileImage); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if processor.calls != 1 {
+		t.Fatalf("expected processor to be invoked once, got %d", processor.calls)
+	}
+	if len(storage.uploaded) != 1 {
+		t.Fatalf("expected one upload, got %d", len(storage.uploaded))
+	}
+	if string(storage.uploaded[0].data) != "processed" {
+		t.Fatalf("expected processed bytes to be uploaded, got %q", storage.uploaded[0].data)
 	}
 }
 
