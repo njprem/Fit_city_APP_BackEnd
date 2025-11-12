@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -237,6 +238,70 @@ func TestReviewService_DeleteReview_Permissions(t *testing.T) {
 	}
 	if !repo.isDeleted(review.ID) {
 		t.Fatalf("review should be soft deleted")
+	}
+}
+
+func TestReviewService_UsesPublicBaseForMediaURLs(t *testing.T) {
+	ctx := context.Background()
+	destID := uuid.New()
+	userID := uuid.New()
+
+	repo := newMemoryReviewRepository()
+	mediaRepo := newMemoryMediaRepository()
+	destRepo := &reviewDestinationRepo{
+		items: map[uuid.UUID]*domain.Destination{
+			destID: {ID: destID, Status: domain.DestinationStatusPublished},
+		},
+	}
+	storage := &reviewStorage{}
+
+	publicBase := "https://cdn.example.com/fitcity-reviews"
+	svc := NewReviewService(repo, mediaRepo, destRepo, storage, ReviewServiceConfig{
+		Bucket:        "fitcity-reviews",
+		PublicBaseURL: publicBase,
+	})
+	svc.now = func() time.Time {
+		return time.Date(2024, 11, 12, 12, 1, 11, 0, time.UTC)
+	}
+
+	title := "Trip"
+	imageBytes := []byte("jpegdata")
+	_, _, err := svc.CreateReview(ctx, userID, destID, ReviewCreateInput{
+		Rating: 4,
+		Title:  &title,
+		Images: []ReviewImageUpload{
+			{
+				Reader:      bytes.NewReader(imageBytes),
+				Size:        int64(len(imageBytes)),
+				FileName:    "photo.jpg",
+				ContentType: "image/jpeg",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateReview returned error: %v", err)
+	}
+
+	var firstMedia domain.ReviewMedia
+	found := false
+	for _, media := range mediaRepo.items {
+		if len(media) == 0 {
+			continue
+		}
+		firstMedia = media[0]
+		found = true
+		break
+	}
+	if !found {
+		t.Fatalf("expected uploaded media to be stored")
+	}
+
+	expectedPrefix := strings.TrimRight(publicBase, "/") + "/reviews/" + destID.String() + "/"
+	if !strings.HasPrefix(firstMedia.URL, expectedPrefix) {
+		t.Fatalf("expected media URL to start with %s, got %s", expectedPrefix, firstMedia.URL)
+	}
+	if strings.Contains(firstMedia.URL, "fitcity-profiles") {
+		t.Fatalf("expected media URL to avoid profile bucket, got %s", firstMedia.URL)
 	}
 }
 

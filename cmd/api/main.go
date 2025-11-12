@@ -89,6 +89,10 @@ func main() {
 	if destinationPublicBase != "" && cfg.MinIOBucketProfile != "" {
 		destinationPublicBase = strings.Replace(destinationPublicBase, cfg.MinIOBucketProfile, cfg.MinIOBucketDestinations, 1)
 	}
+	reviewPublicBase := cfg.MinIOPublicURL
+	if reviewPublicBase != "" && cfg.MinIOBucketProfile != "" {
+		reviewPublicBase = strings.Replace(reviewPublicBase, cfg.MinIOBucketProfile, cfg.MinIOBucketReviews, 1)
+	}
 
 	workflowService := service.NewDestinationWorkflowService(
 		destinationRepo,
@@ -118,6 +122,7 @@ func main() {
 			MaxImageBytes:     cfg.DestinationImageMaxBytes,
 			ImageProcessor:    imageProcessor,
 			ImageMaxDimension: cfg.ImageMaxDimension,
+			PublicBaseURL:     reviewPublicBase,
 		},
 	)
 	favoriteService := service.NewFavoriteService(favoriteRepo, destinationRepo)

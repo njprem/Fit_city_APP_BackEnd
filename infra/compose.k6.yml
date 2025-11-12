@@ -35,3 +35,28 @@ services:
     volumes:
       - ../:/workspace:ro
       - ${K6_HERO_IMAGE_FILE:-/home/kamin/Pictures/BingWallpaper/20251105-MoncayoAutumn_ROW2899498621_UHD.jpg}:/hero-image.jpg:ro
+  k6-view:
+    build:
+      context: ../
+      dockerfile: ./infra/docker/k6.Dockerfile
+    working_dir: /workspace
+    command:
+      - run
+      - /workspace/scripts/k6/view_published_destinations.js
+    environment:
+      BASE_URL: ${K6_BASE_URL:-https://fit-city.kaminjitt.com}
+      DESTINATION_IDS: ${K6_VIEW_DESTINATION_IDS:-}
+      LIST_QUERY: ${K6_VIEW_LIST_QUERY:-}
+      LIST_CATEGORIES: ${K6_VIEW_CATEGORIES:-}
+      MIN_RATING: ${K6_VIEW_MIN_RATING:-}
+      MAX_RATING: ${K6_VIEW_MAX_RATING:-}
+      LIST_SORT: ${K6_VIEW_SORT:-updated}
+      LIST_LIMIT: ${K6_VIEW_LIMIT:-20}
+      LIST_OFFSET: ${K6_VIEW_OFFSET:-0}
+      STEP_DELAY: ${K6_VIEW_STEP_DELAY:-0}
+      ALLOW_EMPTY_RESULTS: ${K6_VIEW_ALLOW_EMPTY_RESULTS:-false}
+      VUS: ${K6_VIEW_VUS:-20}
+      ITERATIONS: ${K6_VIEW_ITERATIONS:-200}
+      SKIP_TLS_VERIFY: ${K6_SKIP_TLS_VERIFY:-false}
+    volumes:
+      - ../:/workspace:ro

@@ -30,6 +30,7 @@ type ReviewServiceConfig struct {
 	AllowedMIMETypes  []string
 	ImageProcessor    media.Processor
 	ImageMaxDimension int
+	PublicBaseURL     string
 }
 
 type ReviewImageUpload struct {
@@ -54,6 +55,7 @@ type ReviewService struct {
 	storage      ports.ObjectStorage
 
 	bucket            string
+	publicBase        string
 	maxImages         int
 	maxImageBytes     int64
 	allowedMIMEs      map[string]struct{}
@@ -101,6 +103,7 @@ func NewReviewService(
 	if maxDimension <= 0 {
 		maxDimension = media.DefaultMaxDimension
 	}
+	publicBase := strings.TrimRight(cfg.PublicBaseURL, "/")
 
 	return &ReviewService{
 		reviews:           reviews,
@@ -108,6 +111,7 @@ func NewReviewService(
 		destinations:      destinations,
 		storage:           storage,
 		bucket:            strings.TrimSpace(cfg.Bucket),
+		publicBase:        publicBase,
 		maxImages:         maxImages,
 		maxImageBytes:     maxBytes,
 		allowedMIMEs:      mimeSet,
@@ -350,6 +354,9 @@ func (s *ReviewService) uploadMedia(ctx context.Context, destinationID, reviewID
 		url, err := s.storage.Upload(ctx, s.bucket, objectKey, contentType, reader, size)
 		if err != nil {
 			return nil, err
+		}
+		if s.publicBase != "" {
+			url = strings.TrimRight(s.publicBase, "/") + "/" + strings.TrimLeft(objectKey, "/")
 		}
 
 		records = append(records, domain.ReviewMedia{
