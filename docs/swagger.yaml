@@ -118,6 +118,125 @@ definitions:
         example: user@example.com
         type: string
     type: object
+  http.ReviewAggregate:
+    properties:
+      average_rating:
+        example: 4.2
+        format: float
+        type: number
+      rating_counts:
+        additionalProperties:
+          type: integer
+        example:
+          "0": 0
+          "1": 1
+          "2": 2
+          "3": 4
+          "4": 6
+          "5": 8
+        type: object
+      total_reviews:
+        example: 21
+        type: integer
+    type: object
+  http.ReviewAuthor:
+    properties:
+      avatar_url:
+        example: https://cdn.fitcity/profiles/user-123.png
+        type: string
+      display_name:
+        example: Jane Doe
+        type: string
+      id:
+        example: 0a1b2c3d-4e5f-6789-abcd-ef0123456789
+        type: string
+      username:
+        example: janedoe
+        type: string
+    type: object
+  http.ReviewCreateResponse:
+    properties:
+      aggregate:
+        $ref: '#/definitions/http.ReviewAggregate'
+      review:
+        $ref: '#/definitions/http.Review'
+    type: object
+  http.ReviewListResponse:
+    properties:
+      average_rating:
+        example: 4.2
+        format: float
+        type: number
+      destination_id:
+        example: 9fd13fd2-63c5-4f29-a210-4a1a8e285f74
+        type: string
+      limit:
+        example: 20
+        type: integer
+      offset:
+        example: 0
+        type: integer
+      rating_counts:
+        additionalProperties:
+          type: integer
+        example:
+          "0": 0
+          "1": 1
+          "2": 2
+          "3": 4
+          "4": 6
+          "5": 8
+        type: object
+      reviews:
+        items:
+          $ref: '#/definitions/http.Review'
+        type: array
+      total_reviews:
+        example: 21
+        type: integer
+    type: object
+  http.ReviewMedia:
+    properties:
+      id:
+        example: 123e4567-e89b-12d3-a456-426614174000
+        type: string
+      ordering:
+        example: 0
+        type: integer
+      url:
+        example: https://cdn.fitcity/reviews/destination/review/image-1.jpg
+        type: string
+    type: object
+  http.Review:
+    properties:
+      content:
+        example: Loved the guided tour and scenery.
+        type: string
+      created_at:
+        example: "2024-05-13T12:00:00Z"
+        type: string
+      destination_id:
+        example: 9fd13fd2-63c5-4f29-a210-4a1a8e285f74
+        type: string
+      id:
+        example: 123e4567-e89b-12d3-a456-426614174000
+        type: string
+      media:
+        items:
+          $ref: '#/definitions/http.ReviewMedia'
+        type: array
+      rating:
+        example: 5
+        type: integer
+      reviewer:
+        $ref: '#/definitions/http.ReviewAuthor'
+      title:
+        example: Incredible experience
+        type: string
+      updated_at:
+        example: "2024-05-14T12:00:00Z"
+        type: string
+    type: object
   http.RegisterRequest:
     properties:
       email:
@@ -125,6 +244,112 @@ definitions:
         type: string
       password:
         example: StrongPass!23
+        type: string
+    type: object
+  http.FavoriteSaveRequest:
+    properties:
+      destination_id:
+        example: 5b7a8702-b2c5-4de4-93c9-99322bd49ee2
+        type: string
+    type: object
+  http.FavoriteRecord:
+    properties:
+      destination_id:
+        example: 5b7a8702-b2c5-4de4-93c9-99322bd49ee2
+        type: string
+      id:
+        example: 11edaf11-0c18-43fd-b42d-0cd36b7c178b
+        type: string
+      saved_at:
+        example: "2024-06-23T10:12:07Z"
+        type: string
+    type: object
+  http.FavoriteDestination:
+    properties:
+      category:
+        example: Nature
+        type: string
+      city:
+        example: Probolinggo
+        type: string
+      country:
+        example: Indonesia
+        type: string
+      hero_image_url:
+        example: https://cdn.fitcity.app/destinations/5b7a.../hero.jpg
+        type: string
+      name:
+        example: Mount Bromo
+        type: string
+      slug:
+        example: mount-bromo
+        type: string
+    type: object
+  http.FavoriteItem:
+    properties:
+      destination:
+        $ref: '#/definitions/http.FavoriteDestination'
+      destination_id:
+        example: 5b7a8702-b2c5-4de4-93c9-99322bd49ee2
+        type: string
+      id:
+        example: 11edaf11-0c18-43fd-b42d-0cd36b7c178b
+        type: string
+      saved_at:
+        example: "2024-06-23T10:12:07Z"
+        type: string
+    type: object
+  http.FavoriteListPagination:
+    properties:
+      count:
+        example: 1
+        type: integer
+      limit:
+        example: 20
+        type: integer
+      offset:
+        example: 0
+        type: integer
+      total:
+        example: 57
+        type: integer
+    type: object
+  http.FavoriteListResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/http.FavoriteItem'
+        type: array
+      pagination:
+        $ref: '#/definitions/http.FavoriteListPagination'
+    type: object
+  http.FavoriteSaveResponse:
+    properties:
+      favorite:
+        $ref: '#/definitions/http.FavoriteRecord'
+      message:
+        example: Destination saved to Favorites
+        type: string
+    type: object
+  http.FavoriteRemoveResponse:
+    properties:
+      destination_id:
+        example: 5b7a8702-b2c5-4de4-93c9-99322bd49ee2
+        type: string
+      message:
+        example: Destination removed from Favorites
+        type: string
+    type: object
+  http.FavoriteCountResponse:
+    properties:
+      destination_id:
+        example: 5b7a8702-b2c5-4de4-93c9-99322bd49ee2
+        type: string
+      favorites_count:
+        example: 1342
+        type: integer
+      last_updated_utc:
+        example: "2024-06-23T10:12:07Z"
         type: string
     type: object
   http.SuccessResponse:
@@ -153,6 +378,338 @@ definitions:
       offset:
         example: 0
         type: integer
+    type: object
+  http.PageMeta:
+    properties:
+      count:
+        example: 1
+        type: integer
+      limit:
+        example: 20
+        type: integer
+      offset:
+        example: 0
+        type: integer
+    type: object
+  http.Destination:
+    properties:
+      category:
+        example: Nature
+        type: string
+      city:
+        example: New York
+        type: string
+      country:
+        example: USA
+        type: string
+      created_at:
+        example: "2024-07-10T12:00:00Z"
+        type: string
+      deleted_at:
+        type: string
+      description:
+        example: Iconic urban park spanning 843 acres.
+        type: string
+      contact:
+        example: +1-212-310-6600
+        type: string
+      opening_time:
+        example: "08:00"
+        type: string
+      closing_time:
+        example: "22:00"
+        type: string
+      gallery:
+        items:
+          $ref: '#/definitions/http.DestinationMedia'
+        type: array
+      average_rating:
+        example: 4.3
+        format: double
+        type: number
+      review_count:
+        example: 128
+        type: integer
+      hero_image_url:
+        example: https://cdn.fitcity/destinations/central-park.jpg
+        type: string
+      id:
+        example: 1da5f07d-7dcf-4aea-b948-7c9daa0a5db7
+        type: string
+      latitude:
+        example: 40.785091
+        format: double
+        type: number
+      longitude:
+        example: -73.968285
+        format: double
+        type: number
+      name:
+        example: Central Park
+        type: string
+      slug:
+        example: central-park
+        type: string
+      status:
+        enum:
+        - draft
+        - published
+        - archived
+        type: string
+      updated_at:
+        example: "2024-07-11T08:00:00Z"
+        type: string
+      updated_by:
+        example: 9fd13fd2-63c5-4f29-a210-4a1a8e285f74
+        type: string
+      version:
+        example: 3
+        type: integer
+    type: object
+  http.DestinationListResponse:
+    properties:
+      destinations:
+        items:
+          $ref: '#/definitions/http.Destination'
+        type: array
+      meta:
+        $ref: '#/definitions/http.PageMeta'
+    type: object
+  http.DestinationResponse:
+    properties:
+      destination:
+        $ref: '#/definitions/http.Destination'
+    type: object
+  http.DestinationChangeFields:
+    description: Editable destination attributes supplied when creating or updating change drafts.
+    properties:
+      name:
+        description: Public display name for the destination.
+        example: Central Park
+        type: string
+      slug:
+        description: Optional URL-friendly slug; generated if omitted.
+        example: central-park
+        type: string
+      city:
+        description: City where the destination is located.
+        example: New York
+        type: string
+      country:
+        description: Country for the destination.
+        example: USA
+        type: string
+      category:
+        description: Free-form category label (e.g., Nature, Museum, Food).
+        example: Nature
+        type: string
+      description:
+        description: Visitor-facing description or highlights.
+        example: Iconic urban park with year-round programming.
+        type: string
+      latitude:
+        description: Decimal latitude for map placement.
+        example: 40.785091
+        format: double
+        type: number
+      longitude:
+        description: Decimal longitude for map placement.
+        example: -73.968285
+        format: double
+        type: number
+      contact:
+        description: Optional contact info (phone, email, or booking URL).
+        example: "+1 212-310-6600"
+        type: string
+      opening_time:
+        description: Daily opening time in HH:MM (24h) format.
+        example: "06:00"
+        type: string
+      closing_time:
+        description: Daily closing time in HH:MM (24h) format.
+        example: "22:00"
+        type: string
+      gallery:
+        description: Ordered gallery media to publish with the destination.
+        items:
+          $ref: '#/definitions/http.DestinationMedia'
+        type: array
+      hero_image_upload_id:
+        description: Temporary upload identifier returned from the hero upload endpoint.
+        example: 9c2d4ee5-32be-4f08-b4c0-f59196c6f36f
+        type: string
+      hero_image_url:
+        description: Fully-qualified URL to an existing hero image when reusing published media.
+        example: https://cdn.fitcity/destinations/central-park.jpg
+        type: string
+      published_hero_image:
+        description: (Read-only) currently published hero image URL; useful for draft diffs.
+        example: https://cdn.fitcity/destinations/central-park.jpg
+        type: string
+      hard_delete:
+        description: When true and action is delete, removes the destination permanently.
+        type: boolean
+      status:
+        description: Desired publication status when approving the draft.
+        enum:
+        - draft
+        - published
+        - archived
+        type: string
+    type: object
+  http.DestinationMedia:
+    properties:
+      url:
+        description: Publicly accessible image URL or CDN path.
+        example: https://cdn.fitcity/destinations/central-park/gallery-1.jpg
+        type: string
+      caption:
+        description: Short description rendered under the image.
+        example: Summer blooms near the lake
+        type: string
+      ordering:
+        description: Zero-based ordering for display.
+        example: 1
+        type: integer
+    required:
+    - url
+    type: object
+  http.GalleryUpload:
+    properties:
+      upload_id:
+        description: Temporary object storage key for the uploaded gallery asset.
+        example: destinations/changes/7b9f.../gallery/asset.jpg
+        type: string
+      url:
+        description: Public URL referencing the uploaded gallery media.
+        example: https://cdn.fitcity/destinations/changes/asset.jpg
+        type: string
+      ordering:
+        description: Suggested ordering offset applied when the upload was appended.
+        type: integer
+    type: object
+  http.DestinationChange:
+    properties:
+      action:
+        enum:
+        - create
+        - update
+        - delete
+        type: string
+      created_at:
+        example: "2024-07-10T12:00:00Z"
+        type: string
+      destination_id:
+        type: string
+      draft_version:
+        example: 2
+        type: integer
+      fields:
+        $ref: '#/definitions/http.DestinationChangeFields'
+      hero_image_temp_key:
+        type: string
+      id:
+        example: 3c7f3af4-6d0b-4933-b3e8-5e56b6f07080
+        type: string
+      published_version:
+        example: 6
+        type: integer
+      review_message:
+        type: string
+      reviewed_at:
+        type: string
+      reviewed_by:
+        type: string
+      status:
+        enum:
+        - draft
+        - pending_review
+        - approved
+        - rejected
+        type: string
+      submitted_at:
+        type: string
+      submitted_by:
+        type: string
+      updated_at:
+        example: "2024-07-11T08:00:00Z"
+        type: string
+    type: object
+  http.DestinationChangeResponse:
+    properties:
+      change_request:
+        $ref: '#/definitions/http.DestinationChange'
+    type: object
+  http.DestinationChangeListResponse:
+    properties:
+      changes:
+        items:
+          $ref: '#/definitions/http.DestinationChange'
+        type: array
+      meta:
+        $ref: '#/definitions/http.PageMeta'
+    type: object
+  http.DestinationDraftRequest:
+    description: Payload for starting a destination change draft.
+    properties:
+      action:
+        description: Draft action indicates whether the change creates, updates, or deletes a destination.
+        enum:
+        - create
+        - update
+        - delete
+        type: string
+      destination_id:
+        description: Destination UUID; required for update and delete actions.
+        type: string
+      fields:
+        description: Field-level changes that should be applied once the draft is approved.
+        $ref: '#/definitions/http.DestinationChangeFields'
+    required:
+    - action
+    example:
+      action: update
+      destination_id: 1da5f07d-7dcf-4aea-b948-7c9daa0a5db7
+      fields:
+        name: Central Park
+        city: New York
+        country: USA
+        status: draft
+    type: object
+  http.DestinationUpdateRequest:
+    description: Update an existing destination change draft. Fields are merged on the server.
+    properties:
+      draft_version:
+        description: Last known draft version to guard against lost updates.
+        example: 2
+        type: integer
+      fields:
+        description: Updated destination fields to merge into the draft payload.
+        $ref: '#/definitions/http.DestinationChangeFields'
+    required:
+    - draft_version
+    example:
+      draft_version: 3
+      fields:
+        description: Adds skating rink programming details.
+        opening_time: "06:00"
+        closing_time: "23:00"
+    type: object
+  http.DestinationRejectRequest:
+    properties:
+      message:
+        example: Please provide updated pricing details.
+        type: string
+    type: object
+  http.DestinationApproveResponse:
+    properties:
+      change_request:
+        $ref: '#/definitions/http.DestinationChange'
+      destination:
+        $ref: '#/definitions/http.Destination'
+      message:
+        example: Destination updated successfully
+        type: string
     type: object
 info:
   contact: {}
@@ -509,6 +1066,656 @@ paths:
       summary: Delete user
       tags:
       - Auth
+  /destinations:
+    get:
+      description: List published destinations visible to end users.
+      parameters:
+      - description: Maximum number of records to return
+        in: query
+        name: limit
+        type: integer
+      - description: Number of records to skip
+        in: query
+        name: offset
+        type: integer
+      - description: Full text search across name, city, country, category, or description
+        in: query
+        name: query
+        type: string
+      - description: Comma-separated list of categories to include
+        in: query
+        name: categories
+        type: string
+      - description: Minimum average rating (0-5)
+        format: double
+        in: query
+        name: min_rating
+        type: number
+      - description: Maximum average rating (0-5)
+        format: double
+        in: query
+        name: max_rating
+        type: number
+      - description: Sort order (rating_desc, rating_asc, alpha_asc, alpha_desc, updated_at_desc)
+        in: query
+        name: sort
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.DestinationListResponse'
+      summary: List published destinations
+      tags:
+      - Destinations
+  /destinations/{id}:
+    get:
+      description: Retrieve a published destination by UUID or slug.
+      parameters:
+      - description: Destination UUID or slug
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.DestinationResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Get published destination
+      tags:
+      - Destinations
+  /destinations/{destination_id}/reviews:
+    get:
+      description: List reviews for a published destination with optional filters.
+      parameters:
+      - description: Destination UUID
+        in: path
+        name: destination_id
+        required: true
+        type: string
+      - description: Maximum number of reviews to return (default 20, max 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Number of reviews to skip
+        in: query
+        name: offset
+        type: integer
+      - description: Filter by exact rating (0-5)
+        in: query
+        name: rating
+        type: integer
+      - description: Minimum rating (0-5)
+        in: query
+        name: min_rating
+        type: integer
+      - description: Maximum rating (0-5)
+        in: query
+        name: max_rating
+        type: integer
+      - description: Include reviews posted on or after this timestamp (RFC3339)
+        in: query
+        name: posted_after
+        type: string
+      - description: Include reviews posted on or before this timestamp (RFC3339)
+        in: query
+        name: posted_before
+        type: string
+      - description: Sort field (`created_at` or `rating`)
+        in: query
+        name: sort
+        type: string
+      - description: Sort order (`asc` or `desc`)
+        in: query
+        name: order
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.ReviewListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: List destination reviews
+      tags:
+      - Reviews
+    post:
+      consumes:
+      - multipart/form-data
+      description: Create a review for a destination. Requires authentication. Users may upload up to five images.
+      parameters:
+      - description: Destination UUID
+        in: path
+        name: destination_id
+        required: true
+        type: string
+      - description: Rating value between 0 and 5
+        in: formData
+        name: rating
+        required: true
+        type: integer
+      - description: Optional review title
+        in: formData
+        name: title
+        type: string
+      - description: Optional review content (requires title if provided)
+        in: formData
+        name: content
+        type: string
+      - collectionFormat: multi
+        description: Review images (JPEG, PNG, or WebP)
+        in: formData
+        name: images
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/http.ReviewCreateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create review
+      tags:
+      - Reviews
+  /reviews/{id}:
+    delete:
+      description: Soft delete a review. Only the author or an administrator may delete a review.
+      parameters:
+      - description: Review UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete review
+      tags:
+      - Reviews
+  /admin/destination-changes:
+    get:
+      description: List destination change requests filtered by status or destination.
+      parameters:
+      - description: Filter by status (draft,pending_review,approved,rejected)
+        in: query
+        name: status
+        type: string
+      - description: Destination UUID to filter by
+        in: query
+        name: destination_id
+        type: string
+      - description: Maximum number of records to return
+        in: query
+        name: limit
+        type: integer
+      - description: Number of records to skip
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.DestinationChangeListResponse'
+      security:
+      - BearerAuth: []
+      summary: List destination change requests
+      tags:
+      - Admin Destinations
+    post:
+      consumes:
+      - application/json
+      description: Create a new destination change draft for create, update, or delete actions.
+      parameters:
+      - in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/http.DestinationDraftRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/http.DestinationChangeResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create destination change draft
+      tags:
+      - Admin Destinations
+  /admin/destination-changes/{id}:
+    get:
+      description: Get a destination change request by identifier.
+      parameters:
+      - description: Change request UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.DestinationChangeResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get destination change request
+      tags:
+      - Admin Destinations
+    put:
+      consumes:
+      - application/json
+      description: Update fields on an existing draft change request.
+      parameters:
+      - description: Change request UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/http.DestinationUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.DestinationChangeResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update destination change draft
+      tags:
+      - Admin Destinations
+  /admin/destination-changes/{id}/submit:
+    post:
+      description: Submit a draft change request for review.
+      parameters:
+      - description: Change request UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/http.DestinationChangeResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Submit destination change for review
+      tags:
+      - Admin Destinations
+  /admin/destination-changes/{id}/approve:
+    post:
+      description: Approve a pending change request and apply it to the destination catalog.
+      parameters:
+      - description: Change request UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.DestinationApproveResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Approve destination change request
+      tags:
+      - Admin Destinations
+  /admin/destination-changes/{id}/reject:
+    post:
+      consumes:
+      - application/json
+      description: Reject a pending change request with reviewer feedback.
+      parameters:
+      - description: Change request UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/http.DestinationRejectRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.DestinationChangeResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Reject destination change request
+      tags:
+      - Admin Destinations
+  /admin/destination-changes/{id}/hero-image:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload or replace the hero image for a change request draft.
+      parameters:
+      - description: Change request UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Image file to upload
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.DestinationChangeResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Upload hero image for change request
+      tags:
+      - Admin Destinations
+  /admin/destination-changes/{id}/gallery:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload one or more optional gallery images for a draft change request. Uploaded URLs are appended to the draft payload.
+      parameters:
+      - description: Change request UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - collectionFormat: multi
+        description: Gallery image files (JPEG, PNG, or WebP)
+        in: formData
+        name: files
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: object
+            properties:
+              change_request:
+                $ref: '#/definitions/http.DestinationChange'
+              gallery_uploads:
+                items:
+                  $ref: '#/definitions/http.GalleryUpload'
+                type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Upload gallery images for change request
+      tags:
+      - Admin Destinations
+  /destinations/{destination_id}/favorites/count:
+    get:
+      description: Retrieve the number of users who saved the specified destination.
+      parameters:
+      - description: Destination UUID
+        in: path
+        name: destination_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.FavoriteCountResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Count destination favorites
+      tags:
+      - Favorites
+  /users/me/favorites:
+    get:
+      description: List destinations saved to the authenticated user's favorites.
+      parameters:
+      - description: Maximum number of favorites to return (default 20, max 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Number of favorites to skip
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.FavoriteListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List my favorites
+      tags:
+      - Favorites
+    post:
+      consumes:
+      - application/json
+      description: Save a destination to the authenticated user's favorites.
+      parameters:
+      - description: Favorite payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/http.FavoriteSaveRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/http.FavoriteSaveResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Save destination
+      tags:
+      - Favorites
+  /users/me/favorites/{destination_id}:
+    delete:
+      description: Remove a destination from the authenticated user's favorites.
+      parameters:
+      - description: Destination UUID
+        in: path
+        name: destination_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.FavoriteRemoveResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Unsave destination
+      tags:
+      - Favorites
 schemes:
 - http
 - https

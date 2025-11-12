@@ -10,10 +10,15 @@
 package main
 
 import (
+	"io"
 	"log"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/njprem/Fit_city_APP_BackEnd/internal/config"
+	"github.com/njprem/Fit_city_APP_BackEnd/internal/logging"
+	"github.com/njprem/Fit_city_APP_BackEnd/internal/media"
 	minioRepo "github.com/njprem/Fit_city_APP_BackEnd/internal/repository/minio"
 	"github.com/njprem/Fit_city_APP_BackEnd/internal/repository/postgres"
 	"github.com/njprem/Fit_city_APP_BackEnd/internal/service"
@@ -25,6 +30,16 @@ import (
 func main() {
 	cfg := config.Load()
 
+	if cfg.LogstashTCPAddr != "" {
+		logstashWriter, err := logging.NewLogstashWriter(cfg.LogstashTCPAddr)
+		if err != nil {
+			log.Fatalf("logstash writer: %v", err)
+		}
+		log.SetOutput(io.MultiWriter(os.Stderr, logstashWriter))
+		defer logstashWriter.Close()
+	}
+	log.SetFlags(0)
+
 	db, err := postgres.New(cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("connect database: %v", err)
@@ -35,6 +50,7 @@ func main() {
 		log.Fatalf("minio client: %v", err)
 	}
 	objectStorage := minioRepo.NewStorage(minioClient, cfg.MinIOPublicURL)
+	imageProcessor := media.NewFFMPEGProcessor(cfg.FFMPEGPath, cfg.ImageMaxDimension)
 
 	sessionTTL, err := time.ParseDuration(cfg.SessionTTL)
 	if err != nil {
@@ -60,11 +76,69 @@ func main() {
 		resetMailer = mail.NewPasswordResetMailer(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPFrom, cfg.SMTPUseTLS)
 	}
 
-	authService := service.NewAuthService(userRepo, roleRepo, sessionRepo, passwordResetRepo, objectStorage, resetMailer, jwtManager, cfg.GoogleAudience, cfg.MinIOBucket, resetTTL, cfg.PasswordResetOTPLength)
+	authService := service.NewAuthService(userRepo, roleRepo, sessionRepo, passwordResetRepo, objectStorage, resetMailer, jwtManager, cfg.GoogleAudience, cfg.MinIOBucketProfile, resetTTL, cfg.PasswordResetOTPLength, imageProcessor, cfg.ProfileImageMaxDimension)
+
+	destinationRepo := postgres.NewDestinationRepo(db)
+	destinationChangeRepo := postgres.NewDestinationChangeRepo(db)
+	destinationVersionRepo := postgres.NewDestinationVersionRepo(db)
+	reviewRepo := postgres.NewReviewRepo(db)
+	reviewMediaRepo := postgres.NewReviewMediaRepo(db)
+	favoriteRepo := postgres.NewFavoriteRepo(db)
+
+	destinationPublicBase := cfg.MinIOPublicURL
+	if destinationPublicBase != "" && cfg.MinIOBucketProfile != "" {
+		destinationPublicBase = strings.Replace(destinationPublicBase, cfg.MinIOBucketProfile, cfg.MinIOBucketDestinations, 1)
+	}
+	reviewPublicBase := cfg.MinIOPublicURL
+	if reviewPublicBase != "" && cfg.MinIOBucketProfile != "" {
+		reviewPublicBase = strings.Replace(reviewPublicBase, cfg.MinIOBucketProfile, cfg.MinIOBucketReviews, 1)
+	}
+
+	workflowService := service.NewDestinationWorkflowService(
+		destinationRepo,
+		destinationChangeRepo,
+		destinationVersionRepo,
+		objectStorage,
+		service.DestinationWorkflowConfig{
+			Bucket:            cfg.MinIOBucketDestinations,
+			PublicBaseURL:     destinationPublicBase,
+			ImageMaxBytes:     cfg.DestinationImageMaxBytes,
+			ImageMaxDimension: cfg.ImageMaxDimension,
+			AllowedCategories: cfg.DestinationAllowedCategories,
+			ApprovalRequired:  cfg.DestinationApprovalRequired,
+			HardDeleteAllowed: cfg.DestinationHardDeleteAllowed,
+			ImageProcessor:    imageProcessor,
+		},
+	)
+
+	destinationService := service.NewDestinationService(destinationRepo)
+	reviewService := service.NewReviewService(
+		reviewRepo,
+		reviewMediaRepo,
+		destinationRepo,
+		objectStorage,
+		service.ReviewServiceConfig{
+			Bucket:            cfg.MinIOBucketReviews,
+			MaxImageBytes:     cfg.DestinationImageMaxBytes,
+			ImageProcessor:    imageProcessor,
+			ImageMaxDimension: cfg.ImageMaxDimension,
+			PublicBaseURL:     reviewPublicBase,
+		},
+	)
+	favoriteService := service.NewFavoriteService(favoriteRepo, destinationRepo)
 
 	router := httpx.NewRouter(cfg.AllowOrigins)
 	httpx.RegisterPages(router, cfg.FrontendBaseURL)
 	httpx.RegisterAuth(router, authService)
+	httpx.RegisterDestinations(router, authService, destinationService, workflowService, httpx.DestinationFeatures{
+		View:   cfg.EnableDestinationView,
+		Create: cfg.EnableDestinationCreate,
+		Update: cfg.EnableDestinationUpdate,
+		Delete: cfg.EnableDestinationDelete,
+	})
+	httpx.RegisterReviews(router, authService, reviewService)
+	httpx.RegisterFavorites(router, authService, favoriteService)
+	httpx.RegisterSwagger(router)
 
 	router.Logger.Fatal(router.Start(":" + cfg.Port))
 }

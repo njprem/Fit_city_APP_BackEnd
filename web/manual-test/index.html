@@ -22,10 +22,39 @@
       text-align: center;
     }
     main {
+      padding: 32px;
+      display: grid;
+      gap: 24px;
+    }
+    .tab-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .tab-button {
+      border: none;
+      background: #e2e8f0;
+      color: #143d8f;
+      padding: 10px 20px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 0.95rem;
+      transition: background 0.2s, color 0.2s;
+    }
+    .tab-button.active {
+      background: #1f5eff;
+      color: #fff;
+    }
+    .tab-panel {
+      display: none;
+    }
+    .tab-panel.active {
+      display: block;
+    }
+    .panel-grid {
       display: grid;
       gap: 24px;
       grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-      padding: 32px;
     }
     section {
       background: #fff;
@@ -45,7 +74,7 @@
       font-size: 0.9rem;
       font-weight: 600;
     }
-    input, textarea {
+    input, textarea, select {
       width: 100%;
       padding: 10px;
       border: 1px solid #d0d7e7;
@@ -70,6 +99,12 @@
     button:hover {
       background: #1746bd;
     }
+    button.danger {
+      background: #d14343;
+    }
+    button.danger:hover {
+      background: #aa2c2c;
+    }
     .muted {
       font-size: 0.85rem;
       color: #5c6b80;
@@ -78,7 +113,7 @@
       display: flex;
       gap: 10px;
     }
-    .row input {
+    .row input, .row select {
       flex: 1;
     }
     pre {
@@ -89,9 +124,6 @@
       overflow-x: auto;
       font-size: 0.85rem;
       max-height: 240px;
-    }
-    .hidden {
-      display: none !important;
     }
     .profile-card {
       display: flex;
@@ -152,154 +184,590 @@
       font-size: 0.75rem;
       color: #5c6b80;
     }
-    .user-list li .actions {
+    .builder-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    }
+    .builder-grid .full-width {
+      grid-column: 1 / -1;
+    }
+    .builder-actions {
       display: flex;
       flex-wrap: wrap;
+      gap: 12px;
+    }
+    button.secondary {
+      background: #475569;
+    }
+    button.secondary:hover {
+      background: #334155;
+    }
+    button.ghost {
+      background: transparent;
+      color: #1f2933;
+      border: 1px solid #d0d7e7;
+    }
+    button.ghost:hover {
+      background: #e2e8f0;
+    }
+    .gallery-builder,
+    .upload-helper {
+      border: 1px dashed #cbd5f5;
+      border-radius: 8px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .gallery-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .gallery-items {
+      display: grid;
+      gap: 12px;
+    }
+    .gallery-item {
+      border: 1px solid #d0d7e7;
+      border-radius: 6px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
       gap: 8px;
-      margin-top: 6px;
     }
-    button.danger {
-      background: #d14343;
+    .gallery-item .builder-grid {
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     }
-    button.danger:hover {
-      background: #aa2c2c;
+    .gallery-item-actions {
+      display: flex;
+      justify-content: flex-end;
+    }
+    .muted.small {
+      font-size: 0.75rem;
     }
   </style>
 </head>
 <body>
   <header>
-    <h1>FitCity Auth Manual Tester</h1>
-    <p class="muted">Use this page to hit the backend auth endpoints without a full frontend. Adjust the base URL if your API is elsewhere.</p>
+    <h1>FitCity API Manual Tester</h1>
+    <p class="muted">Toggle between Auth, Destination Management, Reviews, and Favorites to manually exercise backend endpoints.</p>
   </header>
 
   <main>
-    <section>
-      <h2>Configuration</h2>
-      <label for="baseUrl">API base URL</label>
-      <input id="baseUrl" type="text" value="http://localhost:8080" />
-      <label for="googleClientId">Google OAuth client ID</label>
-      <input id="googleClientId" type="text" value="128350041183-jn7nlbtjris83v4jtedt6mekrbjvij95.apps.googleusercontent.com" />
-      <label for="tokenDisplay">Active JWT</label>
-      <textarea id="tokenDisplay" readonly placeholder="Tokens will appear here after successful login/register."></textarea>
-      <div class="muted">Tokens are also stored in localStorage as <code>fitcity_token</code>.</div>
-    </section>
+    <div class="tab-buttons">
+      <button class="tab-button active" data-tab="authTab">Auth</button>
+      <button class="tab-button" data-tab="managementTab">Destination Management</button>
+      <button class="tab-button" data-tab="reviewsTab">Reviews</button>
+      <button class="tab-button" data-tab="favoritesTab">Favorites</button>
+    </div>
 
-    <section>
-      <h2>Email Registration</h2>
-      <label for="regEmail">Email</label>
-      <input id="regEmail" type="email" placeholder="user@example.com" />
-      <label for="regPassword">Password</label>
-      <input id="regPassword" type="password" placeholder="password" />
-      <button id="regSubmit">Register</button>
-      <pre id="regResult"></pre>
-    </section>
+    <div id="authTab" class="tab-panel active">
+      <div class="panel-grid">
+        <section>
+          <h2>Configuration</h2>
+          <label for="baseUrl">API base URL</label>
+          <input id="baseUrl" type="text" value="http://localhost:8080" />
+          <label for="googleClientId">Google OAuth client ID</label>
+          <input id="googleClientId" type="text" value="128350041183-jn7nlbtjris83v4jtedt6mekrbjvij95.apps.googleusercontent.com" />
+          <label for="tokenDisplay">Active JWT</label>
+          <textarea id="tokenDisplay" readonly placeholder="Tokens appear here after successful auth."></textarea>
+          <div class="muted">Tokens are also stored in localStorage as <code>fitcity_token</code>.</div>
+        </section>
 
-    <section>
-      <h2>Email Login</h2>
-      <label for="loginEmail">Email</label>
-      <input id="loginEmail" type="email" placeholder="user@example.com" />
-      <label for="loginPassword">Password</label>
-      <input id="loginPassword" type="password" placeholder="password" />
-      <button id="loginSubmit">Login</button>
-      <pre id="loginResult"></pre>
-    </section>
+        <section>
+          <h2>Email Registration</h2>
+          <label for="regEmail">Email</label>
+          <input id="regEmail" type="email" placeholder="user@example.com" />
+          <label for="regPassword">Password</label>
+          <input id="regPassword" type="password" placeholder="password" />
+          <button id="regSubmit">Register</button>
+          <pre id="regResult"></pre>
+        </section>
 
-    <section>
-      <h2>Google Login</h2>
-      <p class="muted">Paste a Google ID token (from OAuth playground or your own client) to hit <code>/api/v1/auth/google</code>.</p>
-      <textarea id="googleIdToken" placeholder="eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."></textarea>
-      <div id="googleButtonContainer"></div>
-      <button id="googleSubmit">Login with Google token</button>
-      <pre id="googleResult"></pre>
-    </section>
+        <section>
+          <h2>Email Login</h2>
+          <label for="loginEmail">Email</label>
+          <input id="loginEmail" type="email" placeholder="user@example.com" />
+          <label for="loginPassword">Password</label>
+          <input id="loginPassword" type="password" placeholder="password" />
+          <button id="loginSubmit">Login</button>
+          <pre id="loginResult"></pre>
+        </section>
 
-    <section>
-      <h2>Complete Profile</h2>
-      <label for="profileName">Full name</label>
-      <input id="profileName" type="text" placeholder="Jane Doe" />
-      <label for="profileUsername">Username</label>
-      <input id="profileUsername" type="text" placeholder="janedoe" />
-      <label for="profileAvatar">Avatar (optional image)</label>
-      <input id="profileAvatar" type="file" accept="image/*" />
-      <button id="profileSubmit">Submit profile</button>
-      <pre id="profileResult"></pre>
-    </section>
+        <section>
+          <h2>Google Login</h2>
+          <p class="muted">Paste a Google ID token (from OAuth playground or your own client) to hit <code>/api/v1/auth/google</code>.</p>
+          <textarea id="googleIdToken" placeholder="eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."></textarea>
+          <div id="googleButtonContainer"></div>
+          <button id="googleSubmit">Login with Google token</button>
+          <pre id="googleResult"></pre>
+        </section>
 
-    <section>
-      <h2>Change Password</h2>
-      <p class="muted">Requires an authenticated session. Leave current password blank if your account never had one.</p>
-      <label for="changeCurrentPassword">Current password</label>
-      <input id="changeCurrentPassword" type="password" placeholder="Current password" />
-      <label for="changeNewPassword">New password</label>
-      <input id="changeNewPassword" type="password" placeholder="New password" />
-      <button id="changePasswordSubmit">Update password</button>
-      <pre id="changePasswordResult"></pre>
-    </section>
+        <section>
+          <h2>Complete Profile</h2>
+          <label for="profileName">Full name</label>
+          <input id="profileName" type="text" placeholder="Jane Doe" />
+          <label for="profileUsername">Username</label>
+          <input id="profileUsername" type="text" placeholder="janedoe" />
+          <label for="profileAvatar">Avatar (optional image)</label>
+          <input id="profileAvatar" type="file" accept="image/*" />
+          <button id="profileSubmit">Submit profile</button>
+          <pre id="profileResult"></pre>
+        </section>
 
-    <section>
-      <h2>Password Reset</h2>
-      <div>
-        <h3>Request code</h3>
-        <label for="resetEmailRequest">Account email</label>
-        <input id="resetEmailRequest" type="email" placeholder="user@example.com" />
-        <button id="resetRequestSubmit">Send reset code</button>
-        <pre id="resetRequestResult"></pre>
-      </div>
-      <div>
-        <h3>Confirm reset</h3>
-        <label for="resetEmailConfirm">Account email</label>
-        <input id="resetEmailConfirm" type="email" placeholder="user@example.com" />
-        <label for="resetOTP">Reset code (OTP)</label>
-        <input id="resetOTP" type="text" placeholder="123456" />
-        <label for="resetNewPassword">New password</label>
-        <input id="resetNewPassword" type="password" placeholder="New password" />
-        <button id="resetConfirmSubmit">Confirm password reset</button>
-        <pre id="resetConfirmResult"></pre>
-      </div>
-    </section>
+        <section>
+          <h2>Change Password</h2>
+          <p class="muted">Requires an authenticated session. Leave current password blank if your account never had one.</p>
+          <label for="changeCurrentPassword">Current password</label>
+          <input id="changeCurrentPassword" type="password" placeholder="Current password" />
+          <label for="changeNewPassword">New password</label>
+          <input id="changeNewPassword" type="password" placeholder="New password" />
+          <button id="changePasswordSubmit">Update password</button>
+          <pre id="changePasswordResult"></pre>
+        </section>
 
-    <section>
-      <h2>User Directory</h2>
-      <p class="muted">Calls <code>/api/v1/auth/users</code> with the stored token. Limit is capped at 200 by the API.</p>
-      <label for="userListLimit">Limit</label>
-      <input id="userListLimit" type="number" min="1" max="200" value="20" />
-      <label for="userListOffset">Offset</label>
-      <input id="userListOffset" type="number" min="0" value="0" />
-      <button id="userListSubmit">Fetch users</button>
-      <pre id="userListResult"></pre>
-      <div id="userListMeta" class="muted">Run the request to see pagination metadata.</div>
-      <div id="userListEmpty" class="muted">No users loaded yet.</div>
-      <ul id="userListItems" class="user-list hidden"></ul>
-    </section>
-
-    <section>
-      <h2>Who Am I</h2>
-      <p class="muted">Calls <code>/api/v1/auth/me</code> using the stored token.</p>
-      <button id="meSubmit">Fetch profile</button>
-      <pre id="meResult"></pre>
-      <div id="profileCardEmpty" class="muted">Fetch profile to display user details and avatar.</div>
-      <div id="profileCard" class="profile-card hidden">
-        <img id="profileAvatarPreview" alt="Profile avatar placeholder" />
-        <div class="profile-details">
-          <div><strong>ID:</strong><span id="profileFieldId" class="value">&mdash;</span></div>
-          <div><strong>Email:</strong><span id="profileFieldEmail" class="value">&mdash;</span></div>
-          <div><strong>Username:</strong><span id="profileFieldUsername" class="value">&mdash;</span></div>
-          <div><strong>Full name:</strong><span id="profileFieldFullName" class="value">&mdash;</span></div>
-          <div><strong>Primary role:</strong><span id="profileFieldPrimaryRole" class="value">&mdash;</span></div>
-          <div><strong>All roles:</strong><span id="profileFieldRoles" class="value">&mdash;</span></div>
-          <div><strong>Profile completed:</strong><span id="profileFieldCompleted" class="value">&mdash;</span></div>
-          <div><strong>Created at:</strong><span id="profileFieldCreatedAt" class="value">&mdash;</span></div>
-          <div><strong>Updated at:</strong><span id="profileFieldUpdatedAt" class="value">&mdash;</span></div>
-          <div class="profile-image-url">
-            <strong>Avatar URL:</strong>
-            <a id="profileAvatarLink" class="hidden" target="_blank" rel="noopener noreferrer"></a>
-            <span id="profileAvatarPlaceholder" class="value">No avatar uploaded</span>
+        <section>
+          <h2>Password Reset</h2>
+          <div>
+            <h3>Request code</h3>
+            <label for="resetEmailRequest">Account email</label>
+            <input id="resetEmailRequest" type="email" placeholder="user@example.com" />
+            <button id="resetRequestSubmit">Send reset code</button>
+            <pre id="resetRequestResult"></pre>
           </div>
-        </div>
+          <div>
+            <h3>Confirm reset</h3>
+            <label for="resetEmailConfirm">Account email</label>
+            <input id="resetEmailConfirm" type="email" placeholder="user@example.com" />
+            <label for="resetOTP">Reset code (OTP)</label>
+            <input id="resetOTP" type="text" placeholder="123456" />
+            <label for="resetNewPassword">New password</label>
+            <input id="resetNewPassword" type="password" placeholder="New password" />
+            <button id="resetConfirmSubmit">Confirm password reset</button>
+            <pre id="resetConfirmResult"></pre>
+          </div>
+        </section>
+
+        <section>
+          <h2>User Directory</h2>
+          <p class="muted">Calls <code>/api/v1/auth/users</code> with the stored token. Limit is capped at 200 by the API.</p>
+          <label for="userListLimit">Limit</label>
+          <input id="userListLimit" type="number" min="1" max="200" value="20" />
+          <label for="userListOffset">Offset</label>
+          <input id="userListOffset" type="number" min="0" value="0" />
+          <button id="userListSubmit">Fetch users</button>
+          <pre id="userListResult"></pre>
+          <div id="userListMeta" class="muted">Run the request to see pagination metadata.</div>
+          <div id="userListEmpty" class="muted">No users loaded yet.</div>
+          <ul id="userListItems" class="user-list hidden"></ul>
+        </section>
+
+        <section>
+          <h2>Who Am I</h2>
+          <p class="muted">Calls <code>/api/v1/auth/me</code> using the stored token.</p>
+          <button id="meSubmit">Fetch profile</button>
+          <pre id="meResult"></pre>
+          <div id="profileCardEmpty" class="muted">Fetch profile to display user details and avatar.</div>
+          <div id="profileCard" class="profile-card hidden">
+            <img id="profileAvatarPreview" alt="Profile avatar placeholder" />
+            <div class="profile-details">
+              <div><strong>ID:</strong><span id="profileFieldId" class="value">&mdash;</span></div>
+              <div><strong>Email:</strong><span id="profileFieldEmail" class="value">&mdash;</span></div>
+              <div><strong>Username:</strong><span id="profileFieldUsername" class="value">&mdash;</span></div>
+              <div><strong>Full name:</strong><span id="profileFieldFullName" class="value">&mdash;</span></div>
+              <div><strong>Primary role:</strong><span id="profileFieldPrimaryRole" class="value">&mdash;</span></div>
+              <div><strong>All roles:</strong><span id="profileFieldRoles" class="value">&mdash;</span></div>
+              <div><strong>Profile completed:</strong><span id="profileFieldCompleted" class="value">&mdash;</span></div>
+              <div><strong>Created at:</strong><span id="profileFieldCreatedAt" class="value">&mdash;</span></div>
+              <div><strong>Updated at:</strong><span id="profileFieldUpdatedAt" class="value">&mdash;</span></div>
+              <div class="profile-image-url">
+                <strong>Avatar URL:</strong>
+                <a id="profileAvatarLink" class="hidden" target="_blank" rel="noopener noreferrer"></a>
+                <span id="profileAvatarPlaceholder" class="value">No avatar uploaded</span>
+              </div>
+            </div>
+          </div>
+          <button id="logoutSubmit">Logout</button>
+          <pre id="logoutResult"></pre>
+        </section>
       </div>
-      <button id="logoutSubmit">Logout</button>
-      <pre id="logoutResult"></pre>
-    </section>
+    </div>
+
+    <div id="managementTab" class="tab-panel">
+      <div class="panel-grid">
+        <section>
+          <h2>Management Configuration</h2>
+          <p class="muted">Author actions (create, submit, hero upload) use the author token. Approvals and rejections use the reviewer token.</p>
+          <label for="mgmtAuthorToken">Author token (defaults to auth tab token)</label>
+          <textarea id="mgmtAuthorToken" placeholder="Author JWT"></textarea>
+          <label for="mgmtReviewerToken">Reviewer token</label>
+          <textarea id="mgmtReviewerToken" placeholder="Reviewer JWT"></textarea>
+          <button id="mgmtSwapTokens" type="button">Swap author & reviewer tokens</button>
+          <div class="muted">Reviewer token is stored in localStorage as <code>fitcity_reviewer_token</code>.</div>
+        </section>
+
+        <section>
+          <h2>Create Draft</h2>
+          <label for="mgmtCreateAction">Action</label>
+          <select id="mgmtCreateAction">
+            <option value="create">create</option>
+            <option value="update">update</option>
+            <option value="delete">delete</option>
+          </select>
+          <label for="mgmtCreateDestinationId">Destination ID (required for update/delete)</label>
+          <input id="mgmtCreateDestinationId" type="text" placeholder="uuid" />
+          <label for="mgmtCreateFields">Fields JSON</label>
+          <textarea id="mgmtCreateFields">{ "name": "Sample Destination", "city": "New York", "country": "USA", "category": "Nature", "description": "Iconic destination", "status": "draft" }</textarea>
+          <button id="mgmtCreateSubmit">Send draft</button>
+          <pre id="mgmtCreateResult"></pre>
+        </section>
+        <section>
+          <h2>Destination Field Builder</h2>
+          <p class="muted">Use the form to edit every destination detail. Click &ldquo;Fill JSON with form&rdquo; to sync the payload above or load an existing JSON draft into the form.</p>
+          <div class="builder-grid">
+            <div>
+              <label for="destFieldName">Name</label>
+              <input id="destFieldName" type="text" placeholder="Central Park" />
+            </div>
+            <div>
+              <label for="destFieldSlug">Slug</label>
+              <input id="destFieldSlug" type="text" placeholder="central-park" />
+            </div>
+            <div>
+              <label for="destFieldStatus">Status</label>
+              <select id="destFieldStatus">
+                <option value="">(inherit)</option>
+                <option value="draft">draft</option>
+                <option value="published">published</option>
+                <option value="archived">archived</option>
+              </select>
+            </div>
+          </div>
+          <div class="builder-grid">
+            <div>
+              <label for="destFieldCategory">Category</label>
+              <input id="destFieldCategory" type="text" placeholder="Nature" />
+            </div>
+            <div>
+              <label for="destFieldCity">City</label>
+              <input id="destFieldCity" type="text" placeholder="New York" />
+            </div>
+            <div>
+              <label for="destFieldCountry">Country</label>
+              <input id="destFieldCountry" type="text" placeholder="USA" />
+            </div>
+          </div>
+          <label for="destFieldDescription">Description</label>
+          <textarea id="destFieldDescription" placeholder="Iconic park with year-round events, playgrounds, and skyline views."></textarea>
+          <div class="builder-grid">
+            <div>
+              <label for="destFieldContact">Contact info</label>
+              <input id="destFieldContact" type="text" placeholder="+1 212-310-6600 or reservations@example.com" />
+            </div>
+            <div>
+              <label for="destFieldOpening">Opening time</label>
+              <input id="destFieldOpening" type="text" placeholder="06:00" />
+            </div>
+            <div>
+              <label for="destFieldClosing">Closing time</label>
+              <input id="destFieldClosing" type="text" placeholder="22:00" />
+            </div>
+          </div>
+          <div class="builder-grid">
+            <div>
+              <label for="destFieldLatitude">Latitude</label>
+              <input id="destFieldLatitude" type="number" step="any" placeholder="40.785091" />
+            </div>
+            <div>
+              <label for="destFieldLongitude">Longitude</label>
+              <input id="destFieldLongitude" type="number" step="any" placeholder="-73.968285" />
+            </div>
+            <div>
+              <label for="destFieldHardDelete">Hard delete</label>
+              <select id="destFieldHardDelete">
+                <option value="">(inherit)</option>
+                <option value="true">true</option>
+                <option value="false">false</option>
+              </select>
+            </div>
+          </div>
+          <div class="builder-grid">
+            <div>
+              <label for="destFieldHeroUploadId">Hero image upload ID</label>
+              <input id="destFieldHeroUploadId" type="text" placeholder="temporary-upload-uuid" />
+            </div>
+            <div>
+              <label for="destFieldHeroUrl">Hero image URL</label>
+              <input id="destFieldHeroUrl" type="text" placeholder="https://cdn.fitcity/destinations/central-park.jpg" />
+            </div>
+          </div>
+          <div class="upload-helper">
+            <strong>Hero image upload</strong>
+            <p class="muted small">Requires an existing change request. Uploads use the author token and automatically populate the hero image upload ID field.</p>
+            <div class="builder-grid">
+              <div>
+                <label for="destHeroUploadChangeId">Change request ID</label>
+                <input id="destHeroUploadChangeId" type="text" placeholder="uuid" />
+              </div>
+              <div>
+                <label for="destHeroUploadFile">Hero image file</label>
+                <input id="destHeroUploadFile" type="file" accept="image/*" />
+              </div>
+            </div>
+            <div class="builder-actions">
+              <button id="destHeroUploadButton" type="button" class="secondary">Upload & autofill</button>
+            </div>
+            <pre id="destHeroUploadResult"></pre>
+          </div>
+          <div class="upload-helper">
+            <strong>Gallery upload</strong>
+            <p class="muted small">Upload optional gallery images (multiple files allowed). URLs are added to the builder below for ordering and captions.</p>
+            <div class="builder-grid">
+              <div>
+                <label for="destGalleryUploadChangeId">Change request ID</label>
+                <input id="destGalleryUploadChangeId" type="text" placeholder="uuid" />
+              </div>
+              <div class="full-width">
+                <label for="destGalleryUploadFiles">Gallery images</label>
+                <input id="destGalleryUploadFiles" type="file" multiple accept="image/*" />
+              </div>
+            </div>
+            <div class="builder-actions">
+              <button id="destGalleryUploadButton" type="button" class="secondary">Upload & add to form</button>
+            </div>
+            <pre id="destGalleryUploadResult"></pre>
+          </div>
+          <div class="gallery-builder">
+            <div class="gallery-header">
+              <div>
+                <strong>Gallery</strong>
+                <p class="muted small">Add optional gallery images; only rows with a URL are included.</p>
+              </div>
+              <button id="destGalleryAdd" type="button" class="secondary">Add image</button>
+            </div>
+            <div id="destGalleryItems" class="gallery-items"></div>
+          </div>
+          <div class="builder-actions">
+            <button id="destFieldsApply" type="button">Fill JSON with form</button>
+            <button id="destFieldsLoad" type="button" class="secondary">Load form from JSON</button>
+            <button id="destFieldsClear" type="button" class="ghost">Clear form</button>
+          </div>
+          <pre id="destFieldsResult"></pre>
+        </section>
+
+        <section>
+          <h2>Submit Draft</h2>
+          <label for="mgmtSubmitChangeId">Change request ID</label>
+          <input id="mgmtSubmitChangeId" type="text" placeholder="uuid" />
+          <button id="mgmtSubmitChange">Submit for review</button>
+          <pre id="mgmtSubmitResult"></pre>
+        </section>
+
+        <section>
+          <h2>Approve Change</h2>
+          <p class="muted">Uses the reviewer token.</p>
+          <label for="mgmtApproveChangeId">Change request ID</label>
+          <input id="mgmtApproveChangeId" type="text" placeholder="uuid" />
+          <button id="mgmtApproveChange">Approve</button>
+          <pre id="mgmtApproveResult"></pre>
+        </section>
+
+        <section>
+          <h2>Reject Change</h2>
+          <label for="mgmtRejectChangeId">Change request ID</label>
+          <input id="mgmtRejectChangeId" type="text" placeholder="uuid" />
+          <label for="mgmtRejectMessage">Reviewer message</label>
+          <input id="mgmtRejectMessage" type="text" placeholder="Reason for rejection" />
+          <button id="mgmtRejectChange">Reject</button>
+          <pre id="mgmtRejectResult"></pre>
+        </section>
+
+        <section>
+          <h2>Upload Hero Image</h2>
+          <label for="mgmtHeroChangeId">Change request ID</label>
+          <input id="mgmtHeroChangeId" type="text" placeholder="uuid" />
+          <label for="mgmtHeroFile">Hero image</label>
+          <input id="mgmtHeroFile" type="file" accept="image/*" />
+          <button id="mgmtHeroUpload">Upload hero image</button>
+          <pre id="mgmtHeroResult"></pre>
+        </section>
+
+        <section>
+          <h2>List Change Requests</h2>
+          <label for="mgmtListStatus">Statuses (comma separated)</label>
+          <input id="mgmtListStatus" type="text" placeholder="draft,pending_review" />
+          <label for="mgmtListDestinationId">Destination ID filter</label>
+          <input id="mgmtListDestinationId" type="text" placeholder="uuid" />
+          <div class="row">
+            <div>
+              <label for="mgmtListLimit">Limit</label>
+              <input id="mgmtListLimit" type="number" min="1" value="20" />
+            </div>
+            <div>
+              <label for="mgmtListOffset">Offset</label>
+              <input id="mgmtListOffset" type="number" min="0" value="0" />
+            </div>
+          </div>
+          <button id="mgmtListChanges">Fetch change requests</button>
+          <pre id="mgmtListResult"></pre>
+        </section>
+
+        <section>
+          <h2>Get Change Request</h2>
+          <label for="mgmtGetChangeId">Change request ID</label>
+          <input id="mgmtGetChangeId" type="text" placeholder="uuid" />
+          <button id="mgmtGetChange">Fetch change</button>
+          <pre id="mgmtGetResult"></pre>
+        </section>
+
+        <section>
+          <h2>Published Destinations</h2>
+          <p class="muted">Calls <code>/api/v1/destinations</code>. All users can access this endpoint.</p>
+          <label for="mgmtListPublishedQuery">Search query (optional)</label>
+          <input id="mgmtListPublishedQuery" type="text" placeholder="e.g. central" />
+          <button id="mgmtListPublished">List published destinations</button>
+          <pre id="mgmtListPublishedResult"></pre>
+        </section>
+      </div>
+    </div>
+    <div id="reviewsTab" class="tab-panel">
+      <div class="panel-grid">
+        <section>
+          <h2>Create Review</h2>
+          <p class="muted">Requires login. Rating is 0–5. Attach up to five images (JPEG, PNG, or WebP).</p>
+          <label for="reviewsCreateDestinationId">Destination ID</label>
+          <input id="reviewsCreateDestinationId" type="text" placeholder="uuid" />
+          <label for="reviewsCreateRating">Rating</label>
+          <input id="reviewsCreateRating" type="number" min="0" max="5" value="5" />
+          <label for="reviewsCreateTitle">Title (optional)</label>
+          <input id="reviewsCreateTitle" type="text" placeholder="Amazing place" />
+          <label for="reviewsCreateContent">Content (optional, requires title)</label>
+          <textarea id="reviewsCreateContent" placeholder="Share your experience..."></textarea>
+          <label for="reviewsCreateImages">Images</label>
+          <input id="reviewsCreateImages" type="file" multiple accept="image/jpeg,image/png,image/webp" />
+          <button id="reviewsCreateSubmit" type="button">Submit review</button>
+          <pre id="reviewsCreateResult"></pre>
+        </section>
+
+        <section>
+          <h2>List Reviews</h2>
+          <label for="reviewsListDestinationId">Destination ID</label>
+          <input id="reviewsListDestinationId" type="text" placeholder="uuid" />
+          <div class="row">
+            <div>
+              <label for="reviewsListLimit">Limit</label>
+              <input id="reviewsListLimit" type="number" min="1" value="20" />
+            </div>
+            <div>
+              <label for="reviewsListOffset">Offset</label>
+              <input id="reviewsListOffset" type="number" min="0" value="0" />
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label for="reviewsListRating">Rating</label>
+              <input id="reviewsListRating" type="number" min="0" max="5" placeholder="exact" />
+            </div>
+            <div>
+              <label for="reviewsListMinRating">Min rating</label>
+              <input id="reviewsListMinRating" type="number" min="0" max="5" />
+            </div>
+            <div>
+              <label for="reviewsListMaxRating">Max rating</label>
+              <input id="reviewsListMaxRating" type="number" min="0" max="5" />
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label for="reviewsListPostedAfter">Posted after</label>
+              <input id="reviewsListPostedAfter" type="text" placeholder="RFC3339 timestamp" />
+            </div>
+            <div>
+              <label for="reviewsListPostedBefore">Posted before</label>
+              <input id="reviewsListPostedBefore" type="text" placeholder="RFC3339 timestamp" />
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label for="reviewsListSort">Sort</label>
+              <select id="reviewsListSort">
+                <option value="created_at" selected>created_at</option>
+                <option value="rating">rating</option>
+              </select>
+            </div>
+            <div>
+              <label for="reviewsListOrder">Order</label>
+              <select id="reviewsListOrder">
+                <option value="desc" selected>desc</option>
+                <option value="asc">asc</option>
+              </select>
+            </div>
+          </div>
+          <button id="reviewsListSubmit" type="button">Fetch reviews</button>
+          <pre id="reviewsListResult"></pre>
+        </section>
+
+        <section>
+          <h2>Delete Review</h2>
+          <p class="muted">Requires login as review author or admin.</p>
+          <label for="reviewsDeleteId">Review ID</label>
+          <input id="reviewsDeleteId" type="text" placeholder="uuid" />
+          <button id="reviewsDeleteSubmit" class="danger" type="button">Delete review</button>
+          <pre id="reviewsDeleteResult"></pre>
+        </section>
+      </div>
+    </div>
+    <div id="favoritesTab" class="tab-panel">
+      <div class="panel-grid">
+        <section>
+          <h2>Save Destination</h2>
+          <p class="muted">Requires login. Adds the destination to your favorites list.</p>
+          <label for="favoritesSaveDestinationId">Destination ID</label>
+          <input id="favoritesSaveDestinationId" type="text" placeholder="uuid" />
+          <button id="favoritesSaveSubmit" type="button">Save destination</button>
+          <pre id="favoritesSaveResult"></pre>
+        </section>
+
+        <section>
+          <h2>Unsave Destination</h2>
+          <p class="muted">Requires login. Removes the destination from your favorites list.</p>
+          <label for="favoritesRemoveDestinationId">Destination ID</label>
+          <input id="favoritesRemoveDestinationId" type="text" placeholder="uuid" />
+          <button id="favoritesRemoveSubmit" class="danger" type="button">Remove from favorites</button>
+          <pre id="favoritesRemoveResult"></pre>
+        </section>
+
+        <section>
+          <h2>List My Favorites</h2>
+          <p class="muted">Calls <code>/api/v1/users/me/favorites</code> using the stored token.</p>
+          <div class="row">
+            <div>
+              <label for="favoritesListLimit">Limit</label>
+              <input id="favoritesListLimit" type="number" min="1" value="20" />
+            </div>
+            <div>
+              <label for="favoritesListOffset">Offset</label>
+              <input id="favoritesListOffset" type="number" min="0" value="0" />
+            </div>
+          </div>
+          <button id="favoritesListSubmit" type="button">Fetch favorites</button>
+          <pre id="favoritesListResult"></pre>
+        </section>
+
+        <section>
+          <h2>Destination Favorites Count</h2>
+          <p class="muted">Fetches <code>/api/v1/destinations/{id}/favorites/count</code>. No auth required.</p>
+          <label for="favoritesCountDestinationId">Destination ID</label>
+          <input id="favoritesCountDestinationId" type="text" placeholder="uuid" />
+          <button id="favoritesCountSubmit" type="button">Fetch count</button>
+          <pre id="favoritesCountResult"></pre>
+        </section>
+      </div>
+    </div>
   </main>
 
   <script>
@@ -307,11 +775,28 @@
     const state = {
       token: localStorage.getItem('fitcity_token') || '',
     };
+    const managementState = {
+      reviewerToken: localStorage.getItem('fitcity_reviewer_token') || '',
+    };
     const googleState = {
       initTimer: null,
       lastClientId: null,
     };
     const PLACEHOLDER_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+
+    function activateTab(tabId) {
+      document.querySelectorAll('.tab-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.tab === tabId);
+      });
+      document.querySelectorAll('.tab-panel').forEach((panel) => {
+        panel.classList.toggle('active', panel.id === tabId);
+      });
+    }
+
+    document.querySelectorAll('.tab-button').forEach((button) => {
+      button.addEventListener('click', () => activateTab(button.dataset.tab));
+    });
+
     const profileUI = {
       card: $('profileCard'),
       empty: $('profileCardEmpty'),
@@ -337,26 +822,114 @@
       list: $('userListItems'),
     };
 
+    const managementUI = {
+      authorToken: $('mgmtAuthorToken'),
+      reviewerToken: $('mgmtReviewerToken'),
+      createFields: $('mgmtCreateFields'),
+    };
+    const destinationBuilderUI = {
+      name: $('destFieldName'),
+      slug: $('destFieldSlug'),
+      status: $('destFieldStatus'),
+      category: $('destFieldCategory'),
+      city: $('destFieldCity'),
+      country: $('destFieldCountry'),
+      description: $('destFieldDescription'),
+      contact: $('destFieldContact'),
+      opening: $('destFieldOpening'),
+      closing: $('destFieldClosing'),
+      latitude: $('destFieldLatitude'),
+      longitude: $('destFieldLongitude'),
+      heroUpload: $('destFieldHeroUploadId'),
+      heroUrl: $('destFieldHeroUrl'),
+      hardDelete: $('destFieldHardDelete'),
+      heroUploadChangeId: $('destHeroUploadChangeId'),
+      heroUploadFile: $('destHeroUploadFile'),
+      heroUploadResult: $('destHeroUploadResult'),
+      galleryUploadChangeId: $('destGalleryUploadChangeId'),
+      galleryUploadFiles: $('destGalleryUploadFiles'),
+      galleryUploadResult: $('destGalleryUploadResult'),
+      galleryList: $('destGalleryItems'),
+      result: $('destFieldsResult'),
+    };
+
     function updateToken(newToken) {
-      state.token = newToken;
-      if (newToken) {
-        localStorage.setItem('fitcity_token', newToken);
+      state.token = newToken || '';
+      if (state.token) {
+        localStorage.setItem('fitcity_token', state.token);
       } else {
         localStorage.removeItem('fitcity_token');
       }
-      $('tokenDisplay').value = newToken;
+      if ($('tokenDisplay')) {
+        $('tokenDisplay').value = state.token;
+      }
+      if (managementUI.authorToken && !managementUI.authorToken.value.trim()) {
+        managementUI.authorToken.value = state.token;
+      }
     }
 
     updateToken(state.token);
 
+    if (managementUI.authorToken) {
+      if (!managementUI.authorToken.value.trim()) {
+        managementUI.authorToken.value = state.token;
+      }
+    }
+
+    if (managementUI.reviewerToken) {
+      managementUI.reviewerToken.value = managementState.reviewerToken;
+      managementUI.reviewerToken.addEventListener('input', (event) => {
+        const value = event.target.value.trim();
+        managementState.reviewerToken = value;
+        if (value) {
+          localStorage.setItem('fitcity_reviewer_token', value);
+        } else {
+          localStorage.removeItem('fitcity_reviewer_token');
+        }
+      });
+      const swapButton = $('mgmtSwapTokens');
+      if (swapButton) {
+        swapButton.addEventListener('click', () => {
+          const authorValue = (managementUI.authorToken && managementUI.authorToken.value) || '';
+          const reviewerValue = managementUI.reviewerToken.value || '';
+          if (managementUI.authorToken) {
+            managementUI.authorToken.value = reviewerValue;
+          }
+          managementUI.reviewerToken.value = authorValue;
+          managementState.reviewerToken = authorValue.trim();
+          if (managementState.reviewerToken) {
+            localStorage.setItem('fitcity_reviewer_token', managementState.reviewerToken);
+          } else {
+            localStorage.removeItem('fitcity_reviewer_token');
+          }
+        });
+      }
+    }
+
+    if (managementUI.createFields && !managementUI.createFields.value.trim()) {
+      managementUI.createFields.value = '{ "name": "Sample Destination", "city": "New York", "country": "USA", "category": "Nature", "description": "Iconic destination", "status": "draft" }';
+    }
+
+    function getAuthorToken() {
+      const explicit = managementUI.authorToken ? managementUI.authorToken.value.trim() : '';
+      return explicit || state.token;
+    }
+
+    function getReviewerToken() {
+      const explicit = managementUI.reviewerToken ? managementUI.reviewerToken.value.trim() : '';
+      return explicit || managementState.reviewerToken || '';
+    }
+
     async function request(path, options = {}) {
+      const { tokenOverride, ...rest } = options;
       const base = $('baseUrl').value.replace(/\/$/, '');
       const url = base + path;
-      const headers = options.headers || {};
-      if (state.token && !headers['Authorization']) {
-        headers['Authorization'] = `Bearer ${state.token}`;
+      const headers = rest.headers ? { ...rest.headers } : {};
+      const token = tokenOverride || state.token;
+      if (token && !headers['Authorization']) {
+        headers['Authorization'] = `Bearer ${token}`;
       }
-      const response = await fetch(url, { ...options, headers });
+      const response = await fetch(url, { ...rest, headers });
       let bodyText;
       try {
         bodyText = await response.text();
@@ -375,6 +948,249 @@
     function pretty(result) {
       return JSON.stringify(result, null, 2);
     }
+
+    function builderMessage(message) {
+      if (!destinationBuilderUI.result) {
+        return;
+      }
+      if (typeof message === 'string') {
+        destinationBuilderUI.result.textContent = message;
+      } else {
+        destinationBuilderUI.result.textContent = pretty(message);
+      }
+    }
+
+    function setHeroUploadResult(value) {
+      if (!destinationBuilderUI.heroUploadResult) {
+        return;
+      }
+      if (typeof value === 'string') {
+        destinationBuilderUI.heroUploadResult.textContent = value;
+      } else {
+        destinationBuilderUI.heroUploadResult.textContent = pretty(value);
+      }
+    }
+
+    function setGalleryUploadResult(value) {
+      if (!destinationBuilderUI.galleryUploadResult) {
+        return;
+      }
+      if (typeof value === 'string') {
+        destinationBuilderUI.galleryUploadResult.textContent = value;
+      } else {
+        destinationBuilderUI.galleryUploadResult.textContent = pretty(value);
+      }
+    }
+
+    function ensureGalleryPlaceholder() {
+      if (!destinationBuilderUI.galleryList) {
+        return;
+      }
+      if (!destinationBuilderUI.galleryList.children.length) {
+        addGalleryRow();
+      }
+    }
+
+    function addGalleryRow(initial = {}) {
+      if (!destinationBuilderUI.galleryList) {
+        return;
+      }
+      const row = document.createElement('div');
+      row.className = 'gallery-item';
+      row.dataset.role = 'gallery-item';
+      row.innerHTML = `
+        <div class="builder-grid">
+          <div class="full-width">
+            <label>Image URL</label>
+            <input type="text" class="gallery-url" placeholder="https://cdn.fitcity/example.jpg" />
+          </div>
+          <div class="full-width">
+            <label>Caption</label>
+            <input type="text" class="gallery-caption" placeholder="Optional caption" />
+          </div>
+          <div>
+            <label>Ordering</label>
+            <input type="number" min="0" class="gallery-ordering" />
+          </div>
+        </div>
+        <div class="gallery-item-actions">
+          <button type="button" class="ghost gallery-remove">Remove</button>
+        </div>
+      `;
+      const urlInput = row.querySelector('.gallery-url');
+      const captionInput = row.querySelector('.gallery-caption');
+      const orderingInput = row.querySelector('.gallery-ordering');
+      if (urlInput && initial.url) {
+        urlInput.value = initial.url;
+      }
+      if (captionInput && initial.caption) {
+        captionInput.value = initial.caption;
+      }
+      if (orderingInput && typeof initial.ordering !== 'undefined') {
+        orderingInput.value = initial.ordering;
+      }
+      const removeBtn = row.querySelector('.gallery-remove');
+      if (removeBtn) {
+        removeBtn.addEventListener('click', (event) => {
+          event.preventDefault();
+          row.remove();
+          ensureGalleryPlaceholder();
+        });
+      }
+      destinationBuilderUI.galleryList.appendChild(row);
+    }
+
+    function clearDestinationBuilder() {
+      const keys = ['name', 'slug', 'category', 'city', 'country', 'description', 'contact', 'opening', 'closing', 'latitude', 'longitude', 'heroUpload', 'heroUrl'];
+      keys.forEach((key) => {
+        const el = destinationBuilderUI[key];
+        if (el) {
+          el.value = '';
+        }
+      });
+      if (destinationBuilderUI.status) {
+        destinationBuilderUI.status.value = '';
+      }
+      if (destinationBuilderUI.hardDelete) {
+        destinationBuilderUI.hardDelete.value = '';
+      }
+      if (destinationBuilderUI.galleryList) {
+        destinationBuilderUI.galleryList.innerHTML = '';
+      }
+      ensureGalleryPlaceholder();
+    }
+
+    function collectGalleryItems() {
+      if (!destinationBuilderUI.galleryList) {
+        return [];
+      }
+      const items = [];
+      destinationBuilderUI.galleryList.querySelectorAll('[data-role="gallery-item"]').forEach((row) => {
+        const urlInput = row.querySelector('.gallery-url');
+        const captionInput = row.querySelector('.gallery-caption');
+        const orderingInput = row.querySelector('.gallery-ordering');
+        const urlValue = urlInput && typeof urlInput.value === 'string' ? urlInput.value.trim() : '';
+        if (!urlValue) {
+          return;
+        }
+        const item = { url: urlValue };
+        const captionValue = captionInput && typeof captionInput.value === 'string' ? captionInput.value.trim() : '';
+        if (captionValue) {
+          item.caption = captionValue;
+        }
+        const orderingValue = orderingInput && typeof orderingInput.value === 'string' ? orderingInput.value.trim() : '';
+        if (orderingValue) {
+          const parsedOrdering = Number(orderingValue);
+          if (!Number.isNaN(parsedOrdering)) {
+            item.ordering = parsedOrdering;
+          }
+        }
+        items.push(item);
+      });
+      return items;
+    }
+
+    function collectDestinationFields() {
+      const fields = {};
+      const assign = (key, el) => {
+        if (!el || typeof el.value !== 'string') {
+          return;
+        }
+        const value = el.value.trim();
+        if (value) {
+          fields[key] = value;
+        }
+      };
+      const assignNumber = (key, el) => {
+        if (!el || typeof el.value !== 'string') {
+          return;
+        }
+        const value = el.value.trim();
+        if (!value) {
+          return;
+        }
+        const parsed = Number(value);
+        if (!Number.isNaN(parsed)) {
+          fields[key] = parsed;
+        }
+      };
+      assign('name', destinationBuilderUI.name);
+      assign('slug', destinationBuilderUI.slug);
+      assign('category', destinationBuilderUI.category);
+      assign('city', destinationBuilderUI.city);
+      assign('country', destinationBuilderUI.country);
+      assign('description', destinationBuilderUI.description);
+      assign('contact', destinationBuilderUI.contact);
+      assign('opening_time', destinationBuilderUI.opening);
+      assign('closing_time', destinationBuilderUI.closing);
+      assignNumber('latitude', destinationBuilderUI.latitude);
+      assignNumber('longitude', destinationBuilderUI.longitude);
+      assign('hero_image_upload_id', destinationBuilderUI.heroUpload);
+      assign('hero_image_url', destinationBuilderUI.heroUrl);
+      if (destinationBuilderUI.status && destinationBuilderUI.status.value) {
+        fields.status = destinationBuilderUI.status.value;
+      }
+      if (destinationBuilderUI.hardDelete) {
+        const hardDeleteValue = destinationBuilderUI.hardDelete.value;
+        if (hardDeleteValue === 'true') {
+          fields.hard_delete = true;
+        } else if (hardDeleteValue === 'false') {
+          fields.hard_delete = false;
+        }
+      }
+      const gallery = collectGalleryItems();
+      if (gallery.length) {
+        fields.gallery = gallery;
+      }
+      return fields;
+    }
+
+    function populateBuilderFromFields(fields) {
+      clearDestinationBuilder();
+      if (!fields || typeof fields !== 'object') {
+        return;
+      }
+      const setValue = (el, value) => {
+        if (!el || typeof value === 'undefined' || value === null) {
+          return;
+        }
+        if (typeof value === 'number') {
+          el.value = String(value);
+        } else {
+          el.value = value;
+        }
+      };
+      setValue(destinationBuilderUI.name, fields.name);
+      setValue(destinationBuilderUI.slug, fields.slug);
+      setValue(destinationBuilderUI.category, fields.category);
+      setValue(destinationBuilderUI.city, fields.city);
+      setValue(destinationBuilderUI.country, fields.country);
+      setValue(destinationBuilderUI.description, fields.description);
+      setValue(destinationBuilderUI.contact, fields.contact);
+      setValue(destinationBuilderUI.opening, fields.opening_time);
+      setValue(destinationBuilderUI.closing, fields.closing_time);
+      setValue(destinationBuilderUI.latitude, fields.latitude);
+      setValue(destinationBuilderUI.longitude, fields.longitude);
+      setValue(destinationBuilderUI.heroUpload, fields.hero_image_upload_id);
+      setValue(destinationBuilderUI.heroUrl, fields.hero_image_url);
+      if (destinationBuilderUI.status) {
+        destinationBuilderUI.status.value = fields.status || '';
+      }
+      if (destinationBuilderUI.hardDelete) {
+        if (Object.prototype.hasOwnProperty.call(fields, 'hard_delete')) {
+          destinationBuilderUI.hardDelete.value = String(fields.hard_delete);
+        } else {
+          destinationBuilderUI.hardDelete.value = '';
+        }
+      }
+      if (Array.isArray(fields.gallery) && fields.gallery.length && destinationBuilderUI.galleryList) {
+        destinationBuilderUI.galleryList.innerHTML = '';
+        fields.gallery.forEach((item) => addGalleryRow(item));
+      }
+      ensureGalleryPlaceholder();
+    }
+
+    ensureGalleryPlaceholder();
 
     function formatDate(value) {
       if (!value) {
@@ -434,26 +1250,23 @@
 
       const setField = (key, value) => {
         const el = profileUI.fields[key];
-        if (!el) {
-          return;
+        if (el) {
+          el.textContent = value ?? '—';
         }
-        el.textContent = value ?? '—';
       };
 
       setField('id', user.id || '—');
       setField('email', user.email || '—');
       setField('username', user.username || '—');
       setField('fullName', user.full_name || '—');
+
       const roles = Array.isArray(user.roles) ? user.roles : [];
       if (roles.length > 0) {
         const primary = roles[0] || {};
         const primaryName = primary.role_name || primary.name || '';
         const primaryId = primary.id || '';
-        const primaryLabel = [primaryName, primaryId ? `(${primaryId})` : '']
-          .filter(Boolean)
-          .join(' ');
+        const primaryLabel = [primaryName, primaryId ? `(${primaryId})` : ''].filter(Boolean).join(' ');
         setField('primaryRole', primaryLabel || '—');
-
         const formatted = roles.map((role) => {
           const name = role.role_name || role.name || '';
           const identifier = role.id ? `(${role.id})` : '';
@@ -464,11 +1277,13 @@
         setField('primaryRole', '—');
         setField('roles', '—');
       }
+
       if (typeof user.profile_completed === 'boolean') {
         setField('profileCompleted', user.profile_completed ? 'Yes' : 'No');
       } else {
         setField('profileCompleted', '—');
       }
+
       setField('createdAt', formatDate(user.created_at));
       setField('updatedAt', formatDate(user.updated_at));
 
@@ -528,162 +1343,51 @@
           userListUI.meta.textContent = message;
         }
         if (userListUI.empty) {
-          const message = result && result.body && result.body.error ? result.body.error : 'Request failed';
-          userListUI.empty.textContent = `${message} (status ${result.status}).`;
+          userListUI.empty.textContent = 'Unable to load users.';
           userListUI.empty.classList.remove('hidden');
         }
         return;
       }
 
-      const payload = result.body && typeof result.body === 'object' ? result.body : {};
-      const users = Array.isArray(payload.users) ? payload.users : [];
-      const meta = payload.meta && typeof payload.meta === 'object' ? payload.meta : null;
+      const body = result.body || {};
+      const meta = body.meta || {};
+      const users = Array.isArray(body.users) ? body.users : [];
 
       if (userListUI.meta) {
-        if (meta) {
-          const limitText = meta.limit ?? users.length;
-          const offsetText = meta.offset ?? 0;
-          const countText = meta.count ?? users.length;
-          userListUI.meta.textContent = `Limit ${limitText}, offset ${offsetText}, returned ${countText} user(s).`;
-        } else {
-          userListUI.meta.textContent = `Returned ${users.length} user(s).`;
-        }
+        userListUI.meta.textContent = `count=${meta.count ?? '-'}, limit=${meta.limit ?? '-'}, offset=${meta.offset ?? '-'}`;
       }
 
       if (!users.length) {
         resetList();
         if (userListUI.empty) {
-          userListUI.empty.textContent = 'No users returned.';
+          userListUI.empty.textContent = 'Request successful, but no users returned.';
           userListUI.empty.classList.remove('hidden');
         }
         return;
       }
 
-      userListUI.list.innerHTML = '';
-      users.forEach((user) => {
-        const item = document.createElement('li');
-
-        const emailRow = document.createElement('div');
-        const emailLabel = document.createElement('strong');
-        emailLabel.textContent = 'Email:';
-        emailRow.appendChild(emailLabel);
-        emailRow.append(' ', user && user.email ? user.email : '—');
-
-        const usernameRow = document.createElement('div');
-        const usernameLabel = document.createElement('strong');
-        usernameLabel.textContent = 'Username:';
-        usernameRow.appendChild(usernameLabel);
-        usernameRow.append(' ', user && user.username ? user.username : '—');
-
-        const fullNameRow = document.createElement('div');
-        const fullNameLabel = document.createElement('strong');
-        fullNameLabel.textContent = 'Full name:';
-        fullNameRow.appendChild(fullNameLabel);
-        fullNameRow.append(' ', user && user.full_name ? user.full_name : '—');
-
-        const metaRow = document.createElement('div');
-        metaRow.className = 'user-meta';
-        const profileDone = user && typeof user.profile_completed === 'boolean' ? (user.profile_completed ? 'Yes' : 'No') : '—';
-        const roles = user && Array.isArray(user.roles) ? user.roles : [];
-        const roleSummary = roles.length
-          ? roles
-              .map((role) => {
-                const name = role && (role.role_name || role.name) ? (role.role_name || role.name) : '';
-                const identifier = role && role.id ? `(${role.id})` : '';
-                return [name, identifier].filter(Boolean).join(' ');
-              })
-              .join(', ')
-          : '—';
-        const userId = user && user.id ? user.id : '—';
-        metaRow.textContent = `ID: ${userId} · Roles: ${roleSummary} · Profile complete: ${profileDone}`;
-
-        const timestampRow = document.createElement('div');
-        timestampRow.className = 'user-meta';
-        const created = user && user.created_at ? formatDate(user.created_at) : '—';
-        const updated = user && user.updated_at ? formatDate(user.updated_at) : '—';
-        timestampRow.textContent = `Created: ${created} · Updated: ${updated}`;
-
-        item.appendChild(emailRow);
-        item.appendChild(usernameRow);
-        item.appendChild(fullNameRow);
-        item.appendChild(metaRow);
-        item.appendChild(timestampRow);
-
-        const actionsRow = document.createElement('div');
-        actionsRow.className = 'actions';
-        const deleteBtn = document.createElement('button');
-        deleteBtn.type = 'button';
-        deleteBtn.textContent = 'Delete user';
-        deleteBtn.className = 'danger';
-        if (!user || !user.id) {
-          deleteBtn.disabled = true;
-        } else {
-          deleteBtn.addEventListener('click', async () => {
-            if (!window.confirm(`Delete user ${user.email || user.id}? This cannot be undone.`)) {
-              return;
-            }
-            const originalLabel = deleteBtn.textContent;
-            deleteBtn.disabled = true;
-            deleteBtn.textContent = 'Deleting…';
-            try {
-              const result = await request(`/api/v1/auth/users/${user.id}`, {
-                method: 'DELETE',
-              });
-              $('userListResult').textContent = pretty(result);
-              if (result.status < 400) {
-                await loadUserList();
-                $('userListResult').textContent = pretty(result);
-              } else if (userListUI.meta) {
-                const message = result && result.body && result.body.error ? result.body.error : 'Delete failed';
-                userListUI.meta.textContent = `${message} (status ${result.status}).`;
-              }
-            } catch (err) {
-              const fallback = { status: 0, body: err && err.message ? err.message : 'Delete request failed' };
-              $('userListResult').textContent = pretty(fallback);
-              if (userListUI.meta) {
-                userListUI.meta.textContent = 'Delete request failed.';
-              }
-            } finally {
-              deleteBtn.textContent = originalLabel;
-              deleteBtn.disabled = false;
-            }
-          });
-        }
-        actionsRow.appendChild(deleteBtn);
-        item.appendChild(actionsRow);
-
-        userListUI.list.appendChild(item);
-      });
-
+      userListUI.empty.classList.add('hidden');
       userListUI.list.classList.remove('hidden');
-      if (userListUI.empty) {
-        userListUI.empty.classList.add('hidden');
-      }
-    }
+      userListUI.list.innerHTML = '';
 
-    async function loadUserList() {
-      const limitValue = parseInt($('userListLimit').value, 10);
-      const offsetValue = parseInt($('userListOffset').value, 10);
-      const params = new URLSearchParams();
-      if (Number.isFinite(limitValue) && limitValue > 0) {
-        params.set('limit', String(limitValue));
-      }
-      if (Number.isFinite(offsetValue) && offsetValue >= 0) {
-        params.set('offset', String(offsetValue));
-      }
-      const query = params.toString();
-      const path = `/api/v1/auth/users${query ? `?${query}` : ''}`;
-      try {
-        const result = await request(path);
-        $('userListResult').textContent = pretty(result);
-        renderUserList(result);
-        return result;
-      } catch (err) {
-        const fallback = { status: 0, body: err && err.message ? err.message : 'Request failed' };
-        $('userListResult').textContent = pretty(fallback);
-        renderUserList(fallback);
-        return fallback;
-      }
+      users.forEach((user) => {
+        const li = document.createElement('li');
+        const title = document.createElement('div');
+        title.innerHTML = `<strong>${user.email || 'Unknown email'}</strong>`;
+        li.appendChild(title);
+
+        const metaLine = document.createElement('div');
+        metaLine.className = 'user-meta';
+        metaLine.textContent = `ID: ${user.id || '-'} • Username: ${user.username || '-'} • Roles: ${Array.isArray(user.roles) ? user.roles.map((role) => role.role_name || role.name || '').filter(Boolean).join(', ') : '-'}`;
+        li.appendChild(metaLine);
+
+        const dates = document.createElement('div');
+        dates.className = 'user-meta';
+        dates.textContent = `Created: ${formatDate(user.created_at)} • Updated: ${formatDate(user.updated_at)}`;
+        li.appendChild(dates);
+
+        userListUI.list.appendChild(li);
+      });
     }
 
     function updateProfileFromResult(result) {
@@ -716,7 +1420,9 @@
     async function loginWithGoogleToken(idToken) {
       const trimmed = idToken.trim();
       if (!trimmed) {
-        $('googleResult').textContent = pretty({ status: 0, body: 'Google ID token required' });
+        if ($('googleResult')) {
+          $('googleResult').textContent = pretty({ status: 0, body: 'Google ID token required' });
+        }
         return null;
       }
       const result = await request('/api/v1/auth/google', {
@@ -724,7 +1430,9 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id_token: trimmed }),
       });
-      $('googleResult').textContent = pretty(result);
+      if ($('googleResult')) {
+        $('googleResult').textContent = pretty(result);
+      }
       if (result.status < 400 && result.body.token) {
         updateToken(result.body.token);
       }
@@ -735,11 +1443,17 @@
     function handleGoogleCredentialResponse(response) {
       const credential = (response && response.credential) || '';
       if (!credential) {
-        $('googleResult').textContent = pretty({ status: 0, body: 'Google credential missing from response' });
+        if ($('googleResult')) {
+          $('googleResult').textContent = pretty({ status: 0, body: 'Google credential missing from response' });
+        }
         return;
       }
-      $('googleIdToken').value = credential;
-      $('googleResult').textContent = pretty({ status: 0, body: 'Received Google credential, exchanging with API...' });
+      if ($('googleIdToken')) {
+        $('googleIdToken').value = credential;
+      }
+      if ($('googleResult')) {
+        $('googleResult').textContent = pretty({ status: 0, body: 'Received Google credential, exchanging with API...' });
+      }
       loginWithGoogleToken(credential);
     }
 
@@ -749,7 +1463,9 @@
       }
       const clientId = $('googleClientId').value.trim();
       if (!clientId) {
-        $('googleButtonContainer').innerHTML = '<span class="muted">Add a Google client ID to enable the sign-in button.</span>';
+        if ($('googleButtonContainer')) {
+          $('googleButtonContainer').innerHTML = '<span class="muted">Add a Google client ID to enable the sign-in button.</span>';
+        }
         googleState.lastClientId = null;
         return true;
       }
@@ -788,7 +1504,16 @@
       }
     }
 
-    $('regSubmit').addEventListener('click', async () => {
+    scheduleGoogleButtonRender();
+
+    function attachClick(id, handler) {
+      const el = $(id);
+      if (el) {
+        el.addEventListener('click', handler);
+      }
+    }
+
+    attachClick('regSubmit', async () => {
       const payload = {
         email: $('regEmail').value,
         password: $('regPassword').value,
@@ -798,14 +1523,16 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      $('regResult').textContent = pretty(result);
+      if ($('regResult')) {
+        $('regResult').textContent = pretty(result);
+      }
       if (result.status < 400 && result.body.token) {
         updateToken(result.body.token);
       }
       updateProfileFromResult(result);
     });
 
-    $('loginSubmit').addEventListener('click', async () => {
+    attachClick('loginSubmit', async () => {
       const payload = {
         email: $('loginEmail').value,
         password: $('loginPassword').value,
@@ -815,42 +1542,44 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      $('loginResult').textContent = pretty(result);
+      if ($('loginResult')) {
+        $('loginResult').textContent = pretty(result);
+      }
       if (result.status < 400 && result.body.token) {
         updateToken(result.body.token);
       }
       updateProfileFromResult(result);
     });
 
-    $('googleSubmit').addEventListener('click', async () => {
-      await loginWithGoogleToken($('googleIdToken').value);
+    attachClick('googleSubmit', () => {
+      loginWithGoogleToken($('googleIdToken').value);
     });
 
-    $('googleClientId').addEventListener('input', () => {
-      googleState.lastClientId = null;
-      scheduleGoogleButtonRender();
-    });
-
-    window.addEventListener('load', scheduleGoogleButtonRender);
-    scheduleGoogleButtonRender();
-
-    $('profileSubmit').addEventListener('click', async () => {
-      const form = new FormData();
-      form.append('full_name', $('profileName').value);
-      form.append('username', $('profileUsername').value);
-      const fileInput = $('profileAvatar');
-      if (fileInput.files.length > 0) {
-        form.append('avatar', fileInput.files[0]);
+    attachClick('profileSubmit', async () => {
+      const formData = new FormData();
+      const fullName = $('profileName').value.trim();
+      const username = $('profileUsername').value.trim();
+      if (fullName) {
+        formData.append('full_name', fullName);
+      }
+      if (username) {
+        formData.append('username', username);
+      }
+      const file = $('profileAvatar').files[0];
+      if (file) {
+        formData.append('avatar', file, file.name);
       }
       const result = await request('/api/v1/auth/profile', {
         method: 'POST',
-        body: form,
+        body: formData,
       });
-      $('profileResult').textContent = pretty(result);
+      if ($('profileResult')) {
+        $('profileResult').textContent = pretty(result);
+      }
       updateProfileFromResult(result);
     });
 
-    $('changePasswordSubmit').addEventListener('click', async () => {
+    attachClick('changePasswordSubmit', async () => {
       const payload = {
         current_password: $('changeCurrentPassword').value,
         new_password: $('changeNewPassword').value,
@@ -860,24 +1589,24 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      $('changePasswordResult').textContent = pretty(result);
-      if (result.status < 400) {
-        $('changeCurrentPassword').value = '';
-        $('changeNewPassword').value = '';
+      if ($('changePasswordResult')) {
+        $('changePasswordResult').textContent = pretty(result);
       }
     });
 
-    $('resetRequestSubmit').addEventListener('click', async () => {
+    attachClick('resetRequestSubmit', async () => {
       const payload = { email: $('resetEmailRequest').value };
       const result = await request('/api/v1/auth/password/reset-request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      $('resetRequestResult').textContent = pretty(result);
+      if ($('resetRequestResult')) {
+        $('resetRequestResult').textContent = pretty(result);
+      }
     });
 
-    $('resetConfirmSubmit').addEventListener('click', async () => {
+    attachClick('resetConfirmSubmit', async () => {
       const payload = {
         email: $('resetEmailConfirm').value,
         otp: $('resetOTP').value,
@@ -888,39 +1617,534 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      $('resetConfirmResult').textContent = pretty(result);
-      if (result.status < 400) {
-        $('resetOTP').value = '';
-        $('resetNewPassword').value = '';
+      if ($('resetConfirmResult')) {
+        $('resetConfirmResult').textContent = pretty(result);
       }
     });
 
-    const userListButton = $('userListSubmit');
-    if (userListButton) {
-      userListButton.addEventListener('click', () => {
-        loadUserList();
-      });
-    }
+    attachClick('userListSubmit', async () => {
+      const limit = Math.max(parseInt($('userListLimit').value, 10) || 0, 1);
+      const offset = Math.max(parseInt($('userListOffset').value, 10) || 0, 0);
+      const params = new URLSearchParams();
+      params.set('limit', String(limit));
+      params.set('offset', String(offset));
+      const result = await request(`/api/v1/auth/users?${params.toString()}`);
+      if ($('userListResult')) {
+        $('userListResult').textContent = pretty(result);
+      }
+      renderUserList(result);
+    });
 
-    $('meSubmit').addEventListener('click', async () => {
+    attachClick('meSubmit', async () => {
       const result = await request('/api/v1/auth/me');
-      $('meResult').textContent = pretty(result);
+      if ($('meResult')) {
+        $('meResult').textContent = pretty(result);
+      }
       updateProfileFromResult(result);
     });
 
-    $('logoutSubmit').addEventListener('click', async () => {
-      const result = await request('/api/v1/auth/logout', {
-        method: 'POST',
-      });
-      $('logoutResult').textContent = pretty(result);
-      if (result.status < 400) {
-        updateToken('');
-        renderProfile(null);
-      } else if (result.status === 401) {
+    attachClick('logoutSubmit', async () => {
+      const result = await request('/api/v1/auth/logout', { method: 'POST' });
+      if ($('logoutResult')) {
+        $('logoutResult').textContent = pretty(result);
+      }
+      if (result.status === 200) {
         updateToken('');
         renderProfile(null);
       }
     });
+
+    function parseJsonFields(text, resultId) {
+      try {
+        return JSON.parse(text);
+      } catch (err) {
+        if ($(resultId)) {
+          $(resultId).textContent = pretty({ status: 0, body: `Invalid JSON: ${err.message}` });
+        }
+        return null;
+      }
+    }
+
+    attachClick('destGalleryAdd', (event) => {
+      event.preventDefault();
+      addGalleryRow();
+      builderMessage('Added gallery row.');
+    });
+
+    attachClick('destFieldsApply', (event) => {
+      event.preventDefault();
+      if (!managementUI.createFields) {
+        builderMessage('Fields textarea not found.');
+        return;
+      }
+      const fields = collectDestinationFields();
+      const keys = Object.keys(fields).length;
+      managementUI.createFields.value = keys ? JSON.stringify(fields, null, 2) : '{}';
+      builderMessage(`Fields JSON updated (${keys} key${keys === 1 ? '' : 's'})`);
+    });
+
+    attachClick('destFieldsLoad', (event) => {
+      event.preventDefault();
+      if (!managementUI.createFields) {
+        builderMessage('Fields textarea not found.');
+        return;
+      }
+      const text = managementUI.createFields.value || '{}';
+      const parsed = parseJsonFields(text, 'destFieldsResult');
+      if (!parsed) {
+        return;
+      }
+      populateBuilderFromFields(parsed);
+      builderMessage('Loaded form from JSON.');
+    });
+
+    attachClick('destFieldsClear', (event) => {
+      event.preventDefault();
+      clearDestinationBuilder();
+      builderMessage('Form cleared.');
+    });
+
+    attachClick('destHeroUploadButton', async (event) => {
+      event.preventDefault();
+      const changeIdInput = destinationBuilderUI.heroUploadChangeId;
+      const fileInput = destinationBuilderUI.heroUploadFile;
+      if (!changeIdInput || !fileInput) {
+        builderMessage('Hero upload inputs not found.');
+        return;
+      }
+      const changeId = changeIdInput.value.trim();
+      if (!changeId) {
+        builderMessage('Provide a change request ID before uploading.');
+        return;
+      }
+      if (!fileInput.files || !fileInput.files[0]) {
+        builderMessage('Select an image file to upload.');
+        return;
+      }
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+      builderMessage('Uploading hero image...');
+      setHeroUploadResult('Uploading hero image...');
+      const result = await request(`/api/v1/admin/destination-changes/${changeId}/hero-image`, {
+        method: 'POST',
+        body: formData,
+        tokenOverride: getAuthorToken(),
+      });
+      if (result.status < 400) {
+        const change = result.body && result.body.change_request;
+        const heroId = change && change.fields && change.fields.hero_image_upload_id;
+        if (heroId && destinationBuilderUI.heroUpload) {
+          destinationBuilderUI.heroUpload.value = heroId;
+        }
+        builderMessage({
+          status: result.status,
+          hero_image_upload_id: heroId || 'not returned',
+        });
+        setHeroUploadResult({
+          status: result.status,
+          hero_image_upload_id: heroId || 'not returned',
+        });
+      } else {
+        builderMessage(result);
+        setHeroUploadResult(result);
+      }
+    });
+
+    attachClick('destGalleryUploadButton', async (event) => {
+      event.preventDefault();
+      const changeIdInput = destinationBuilderUI.galleryUploadChangeId;
+      const fallbackChangeId = destinationBuilderUI.heroUploadChangeId;
+      const fileInput = destinationBuilderUI.galleryUploadFiles;
+      if (!fileInput) {
+        setGalleryUploadResult('Gallery upload inputs not found.');
+        return;
+      }
+      const changeId = (changeIdInput && changeIdInput.value.trim()) || (fallbackChangeId && fallbackChangeId.value.trim()) || '';
+      if (!changeId) {
+        setGalleryUploadResult('Provide a change request ID before uploading.');
+        return;
+      }
+      if (!fileInput.files || !fileInput.files.length) {
+        setGalleryUploadResult('Select one or more images to upload.');
+        return;
+      }
+      const formData = new FormData();
+      Array.from(fileInput.files).forEach((file) => formData.append('files', file));
+      setGalleryUploadResult('Uploading gallery images...');
+      builderMessage('Uploading gallery images...');
+      const result = await request(`/api/v1/admin/destination-changes/${changeId}/gallery`, {
+        method: 'POST',
+        body: formData,
+        tokenOverride: getAuthorToken(),
+      });
+      setGalleryUploadResult(result);
+      if (result.status < 400) {
+        const uploads = (result.body && Array.isArray(result.body.gallery_uploads) ? result.body.gallery_uploads : []);
+        uploads.forEach((item) => {
+          if (item && item.url) {
+            addGalleryRow({
+              url: item.url,
+              ordering: typeof item.ordering === 'number' ? item.ordering : undefined,
+            });
+          }
+        });
+        builderMessage(`Uploaded ${uploads.length} gallery ${uploads.length === 1 ? 'image' : 'images'}.`);
+      } else {
+        builderMessage(result);
+      }
+    });
+
+    attachClick('mgmtCreateSubmit', async () => {
+      const action = $('mgmtCreateAction').value;
+      const destinationId = $('mgmtCreateDestinationId').value.trim();
+      const fieldsText = $('mgmtCreateFields').value || '{}';
+      const fields = parseJsonFields(fieldsText, 'mgmtCreateResult');
+      if (!fields) {
+        return;
+      }
+      const payload = { action, fields };
+      if (destinationId) {
+        payload.destination_id = destinationId;
+      }
+      const result = await request('/api/v1/admin/destination-changes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        tokenOverride: getAuthorToken(),
+      });
+      if ($('mgmtCreateResult')) {
+        $('mgmtCreateResult').textContent = pretty(result);
+      }
+    });
+
+    attachClick('mgmtSubmitChange', async () => {
+      const changeId = $('mgmtSubmitChangeId').value.trim();
+      if (!changeId) {
+        if ($('mgmtSubmitResult')) {
+          $('mgmtSubmitResult').textContent = pretty({ status: 0, body: 'Change request ID required' });
+        }
+        return;
+      }
+      const result = await request(`/api/v1/admin/destination-changes/${changeId}/submit`, {
+        method: 'POST',
+        tokenOverride: getAuthorToken(),
+      });
+      if ($('mgmtSubmitResult')) {
+        $('mgmtSubmitResult').textContent = pretty(result);
+      }
+    });
+
+    attachClick('mgmtApproveChange', async () => {
+      const changeId = $('mgmtApproveChangeId').value.trim();
+      const token = getReviewerToken();
+      if (!token) {
+        if ($('mgmtApproveResult')) {
+          $('mgmtApproveResult').textContent = pretty({ status: 0, body: 'Reviewer token required' });
+        }
+        return;
+      }
+      if (!changeId) {
+        if ($('mgmtApproveResult')) {
+          $('mgmtApproveResult').textContent = pretty({ status: 0, body: 'Change request ID required' });
+        }
+        return;
+      }
+      const result = await request(`/api/v1/admin/destination-changes/${changeId}/approve`, {
+        method: 'POST',
+        tokenOverride: token,
+      });
+      if ($('mgmtApproveResult')) {
+        $('mgmtApproveResult').textContent = pretty(result);
+      }
+    });
+
+    attachClick('mgmtRejectChange', async () => {
+      const changeId = $('mgmtRejectChangeId').value.trim();
+      const message = $('mgmtRejectMessage').value;
+      const token = getReviewerToken();
+      if (!token) {
+        if ($('mgmtRejectResult')) {
+          $('mgmtRejectResult').textContent = pretty({ status: 0, body: 'Reviewer token required' });
+        }
+        return;
+      }
+      if (!changeId) {
+        if ($('mgmtRejectResult')) {
+          $('mgmtRejectResult').textContent = pretty({ status: 0, body: 'Change request ID required' });
+        }
+        return;
+      }
+      const result = await request(`/api/v1/admin/destination-changes/${changeId}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message }),
+        tokenOverride: token,
+      });
+      if ($('mgmtRejectResult')) {
+        $('mgmtRejectResult').textContent = pretty(result);
+      }
+    });
+
+    attachClick('mgmtHeroUpload', async () => {
+      const changeId = $('mgmtHeroChangeId').value.trim();
+      const fileInput = $('mgmtHeroFile');
+      if (!changeId) {
+        if ($('mgmtHeroResult')) {
+          $('mgmtHeroResult').textContent = pretty({ status: 0, body: 'Change request ID required' });
+        }
+        return;
+      }
+      if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+        if ($('mgmtHeroResult')) {
+          $('mgmtHeroResult').textContent = pretty({ status: 0, body: 'Select an image file to upload' });
+        }
+        return;
+      }
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+      const result = await request(`/api/v1/admin/destination-changes/${changeId}/hero-image`, {
+        method: 'POST',
+        body: formData,
+        tokenOverride: getAuthorToken(),
+      });
+      if ($('mgmtHeroResult')) {
+        $('mgmtHeroResult').textContent = pretty(result);
+      }
+    });
+
+    attachClick('mgmtListChanges', async () => {
+      const params = new URLSearchParams();
+      const status = $('mgmtListStatus').value.trim();
+      const destination = $('mgmtListDestinationId').value.trim();
+      const limit = Math.max(parseInt($('mgmtListLimit').value, 10) || 0, 1);
+      const offset = Math.max(parseInt($('mgmtListOffset').value, 10) || 0, 0);
+      if (status) {
+        params.set('status', status);
+      }
+      if (destination) {
+        params.set('destination_id', destination);
+      }
+      if (limit) {
+        params.set('limit', String(limit));
+      }
+      params.set('offset', String(offset));
+      const query = params.toString();
+      const result = await request(`/api/v1/admin/destination-changes${query ? `?${query}` : ''}`, {
+        tokenOverride: getAuthorToken(),
+      });
+      if ($('mgmtListResult')) {
+        $('mgmtListResult').textContent = pretty(result);
+      }
+    });
+
+    attachClick('mgmtGetChange', async () => {
+      const changeId = $('mgmtGetChangeId').value.trim();
+      if (!changeId) {
+        if ($('mgmtGetResult')) {
+          $('mgmtGetResult').textContent = pretty({ status: 0, body: 'Change request ID required' });
+        }
+        return;
+      }
+      const result = await request(`/api/v1/admin/destination-changes/${changeId}`, {
+        tokenOverride: getAuthorToken(),
+      });
+      if ($('mgmtGetResult')) {
+        $('mgmtGetResult').textContent = pretty(result);
+      }
+    });
+
+    attachClick('mgmtListPublished', async () => {
+      const queryValue = $('mgmtListPublishedQuery') ? $('mgmtListPublishedQuery').value.trim() : '';
+      const params = new URLSearchParams();
+      if (queryValue) {
+        params.set('query', queryValue);
+      }
+      const url = params.toString() ? `/api/v1/destinations?${params.toString()}` : '/api/v1/destinations';
+      const result = await request(url);
+      if ($('mgmtListPublishedResult')) {
+        $('mgmtListPublishedResult').textContent = pretty(result);
+      }
+    });
+
+    attachClick('reviewsCreateSubmit', async () => {
+      const destId = $('reviewsCreateDestinationId').value.trim();
+      const ratingValue = $('reviewsCreateRating').value.trim();
+      if (!destId) {
+        if ($('reviewsCreateResult')) {
+          $('reviewsCreateResult').textContent = pretty({ status: 0, body: 'Destination ID required' });
+        }
+        return;
+      }
+      if (!ratingValue) {
+        if ($('reviewsCreateResult')) {
+          $('reviewsCreateResult').textContent = pretty({ status: 0, body: 'Rating is required' });
+        }
+        return;
+      }
+      const rating = parseInt(ratingValue, 10);
+      if (Number.isNaN(rating)) {
+        if ($('reviewsCreateResult')) {
+          $('reviewsCreateResult').textContent = pretty({ status: 0, body: 'Rating must be an integer' });
+        }
+        return;
+      }
+      const formData = new FormData();
+      formData.append('rating', String(rating));
+      const title = $('reviewsCreateTitle').value.trim();
+      const content = $('reviewsCreateContent').value.trim();
+      if (title) {
+        formData.append('title', title);
+      }
+      if (content) {
+        formData.append('content', content);
+      }
+      const filesInput = $('reviewsCreateImages');
+      if (filesInput && filesInput.files && filesInput.files.length) {
+        Array.from(filesInput.files).forEach((file) => {
+          formData.append('images', file, file.name);
+        });
+      }
+      const result = await request(`/api/v1/destinations/${destId}/reviews`, {
+        method: 'POST',
+        body: formData,
+      });
+      if ($('reviewsCreateResult')) {
+        $('reviewsCreateResult').textContent = pretty(result);
+      }
+    });
+
+    attachClick('reviewsListSubmit', async () => {
+      const destId = $('reviewsListDestinationId').value.trim();
+      if (!destId) {
+        if ($('reviewsListResult')) {
+          $('reviewsListResult').textContent = pretty({ status: 0, body: 'Destination ID required' });
+        }
+        return;
+      }
+      const params = new URLSearchParams();
+      const limit = parseInt($('reviewsListLimit').value, 10);
+      if (!Number.isNaN(limit) && limit > 0) {
+        params.set('limit', String(limit));
+      }
+      const offset = parseInt($('reviewsListOffset').value, 10);
+      if (!Number.isNaN(offset) && offset >= 0) {
+        params.set('offset', String(offset));
+      }
+      const rating = parseInt($('reviewsListRating').value, 10);
+      if (!Number.isNaN(rating)) {
+        params.set('rating', String(rating));
+      }
+      const minRating = parseInt($('reviewsListMinRating').value, 10);
+      if (!Number.isNaN(minRating)) {
+        params.set('min_rating', String(minRating));
+      }
+      const maxRating = parseInt($('reviewsListMaxRating').value, 10);
+      if (!Number.isNaN(maxRating)) {
+        params.set('max_rating', String(maxRating));
+      }
+      const postedAfter = $('reviewsListPostedAfter').value.trim();
+      if (postedAfter) {
+        params.set('posted_after', postedAfter);
+      }
+      const postedBefore = $('reviewsListPostedBefore').value.trim();
+      if (postedBefore) {
+        params.set('posted_before', postedBefore);
+      }
+      const sort = $('reviewsListSort').value;
+      if (sort) {
+        params.set('sort', sort);
+      }
+      const order = $('reviewsListOrder').value;
+      if (order) {
+        params.set('order', order);
+      }
+      const query = params.toString();
+      const url = `/api/v1/destinations/${destId}/reviews${query ? `?${query}` : ''}`;
+      const result = await request(url);
+      if ($('reviewsListResult')) {
+        $('reviewsListResult').textContent = pretty(result);
+      }
+    });
+
+    attachClick('reviewsDeleteSubmit', async () => {
+      const reviewId = $('reviewsDeleteId').value.trim();
+      if (!reviewId) {
+        if ($('reviewsDeleteResult')) {
+          $('reviewsDeleteResult').textContent = pretty({ status: 0, body: 'Review ID required' });
+        }
+        return;
+      }
+      const result = await request(`/api/v1/reviews/${reviewId}`, { method: 'DELETE' });
+      if ($('reviewsDeleteResult')) {
+        $('reviewsDeleteResult').textContent = pretty(result);
+      }
+    });
+
+    attachClick('favoritesSaveSubmit', async () => {
+      const destId = $('favoritesSaveDestinationId').value.trim();
+      if (!destId) {
+        if ($('favoritesSaveResult')) {
+          $('favoritesSaveResult').textContent = pretty({ status: 0, body: 'Destination ID required' });
+        }
+        return;
+      }
+      const result = await request('/api/v1/users/me/favorites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ destination_id: destId }),
+      });
+      if ($('favoritesSaveResult')) {
+        $('favoritesSaveResult').textContent = pretty(result);
+      }
+    });
+
+    attachClick('favoritesRemoveSubmit', async () => {
+      const destId = $('favoritesRemoveDestinationId').value.trim();
+      if (!destId) {
+        if ($('favoritesRemoveResult')) {
+          $('favoritesRemoveResult').textContent = pretty({ status: 0, body: 'Destination ID required' });
+        }
+        return;
+      }
+      const result = await request(`/api/v1/users/me/favorites/${destId}`, { method: 'DELETE' });
+      if ($('favoritesRemoveResult')) {
+        $('favoritesRemoveResult').textContent = pretty(result);
+      }
+    });
+
+    attachClick('favoritesListSubmit', async () => {
+      const params = new URLSearchParams();
+      const limit = parseInt($('favoritesListLimit').value, 10);
+      if (!Number.isNaN(limit) && limit > 0) {
+        params.set('limit', String(limit));
+      }
+      const offset = parseInt($('favoritesListOffset').value, 10);
+      if (!Number.isNaN(offset) && offset >= 0) {
+        params.set('offset', String(offset));
+      }
+      const query = params.toString();
+      const url = `/api/v1/users/me/favorites${query ? `?${query}` : ''}`;
+      const result = await request(url);
+      if ($('favoritesListResult')) {
+        $('favoritesListResult').textContent = pretty(result);
+      }
+    });
+
+    attachClick('favoritesCountSubmit', async () => {
+      const destId = $('favoritesCountDestinationId').value.trim();
+      if (!destId) {
+        if ($('favoritesCountResult')) {
+          $('favoritesCountResult').textContent = pretty({ status: 0, body: 'Destination ID required' });
+        }
+        return;
+      }
+      const result = await request(`/api/v1/destinations/${destId}/favorites/count`);
+      if ($('favoritesCountResult')) {
+        $('favoritesCountResult').textContent = pretty(result);
+      }
+    });
+
+    activateTab('authTab');
   </script>
 </body>
 </html>

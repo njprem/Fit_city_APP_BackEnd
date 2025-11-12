@@ -1,0 +1,62 @@
+services:
+  k6:
+    build:
+      context: ../
+      dockerfile: ./infra/docker/k6.Dockerfile
+    working_dir: /workspace
+    command:
+      - run
+      - /workspace/scripts/k6/create_destination_with_image.js
+    environment:
+      BASE_URL: ${K6_BASE_URL:-https://fit-city.kaminjitt.com}
+      ADMIN_EMAIL: ${K6_ADMIN_EMAIL:-admin1@kaminjitt.com}
+      ADMIN_PASSWORD: ${K6_ADMIN_PASSWORD:-Str0ngPass!23}
+      DEST_CATEGORY: ${K6_DEST_CATEGORY:-Nature}
+      DEST_CITY: ${K6_DEST_CITY:-Jakarta}
+      DEST_COUNTRY: ${K6_DEST_COUNTRY:-Indonesia}
+      DEST_DESCRIPTION: ${K6_DEST_DESCRIPTION:-Automated destination seeded by k6}
+      DEST_CONTACT: ${K6_DEST_CONTACT:-12345678}
+      DEST_OPENING: ${K6_DEST_OPENING:-08:00}
+      DEST_CLOSING: ${K6_DEST_CLOSING:-18:00}
+      DEST_STATUS: ${K6_DEST_STATUS:-draft}
+      DEST_LAT: "${K6_DEST_LAT:--6.2088}"
+      DEST_LON: "${K6_DEST_LON:-106.8456}"
+      STEP_DELAY: ${K6_STEP_DELAY:-0}
+      LOGIN_PER_ITERATION: ${K6_LOGIN_PER_ITERATION:-false}
+      SKIP_TLS_VERIFY: ${K6_SKIP_TLS_VERIFY:-false}
+      HERO_IMAGE_PATH: /hero-image.jpg
+      HERO_IMAGE_MAX_BYTES: ${K6_HERO_IMAGE_MAX_BYTES:-5242880}
+      HERO_IMAGE_MAX_DIMENSION: ${K6_HERO_IMAGE_MAX_DIMENSION:-1920}
+      HERO_IMAGE_QUALITY: ${K6_HERO_IMAGE_QUALITY:-82}
+      HERO_IMAGE_NAME: ${K6_HERO_IMAGE_NAME:-20251105-MoncayoAutumn_ROW2899498621_UHD.jpg}
+      HERO_IMAGE_MIME: ${K6_HERO_IMAGE_MIME:-image/jpeg}
+      VUS: ${K6_VUS:-5}
+      ITERATIONS: ${K6_ITERATIONS:-5}
+    volumes:
+      - ../:/workspace:ro
+      - ${K6_HERO_IMAGE_FILE:-/home/kamin/Pictures/BingWallpaper/20251105-MoncayoAutumn_ROW2899498621_UHD.jpg}:/hero-image.jpg:ro
+  k6-view:
+    build:
+      context: ../
+      dockerfile: ./infra/docker/k6.Dockerfile
+    working_dir: /workspace
+    command:
+      - run
+      - /workspace/scripts/k6/view_published_destinations.js
+    environment:
+      BASE_URL: ${K6_BASE_URL:-https://fit-city.kaminjitt.com}
+      DESTINATION_IDS: ${K6_VIEW_DESTINATION_IDS:-}
+      LIST_QUERY: ${K6_VIEW_LIST_QUERY:-}
+      LIST_CATEGORIES: ${K6_VIEW_CATEGORIES:-}
+      MIN_RATING: ${K6_VIEW_MIN_RATING:-}
+      MAX_RATING: ${K6_VIEW_MAX_RATING:-}
+      LIST_SORT: ${K6_VIEW_SORT:-updated}
+      LIST_LIMIT: ${K6_VIEW_LIMIT:-20}
+      LIST_OFFSET: ${K6_VIEW_OFFSET:-0}
+      STEP_DELAY: ${K6_VIEW_STEP_DELAY:-0}
+      ALLOW_EMPTY_RESULTS: ${K6_VIEW_ALLOW_EMPTY_RESULTS:-false}
+      VUS: ${K6_VIEW_VUS:-20}
+      ITERATIONS: ${K6_VIEW_ITERATIONS:-200}
+      SKIP_TLS_VERIFY: ${K6_SKIP_TLS_VERIFY:-false}
+    volumes:
+      - ../:/workspace:ro

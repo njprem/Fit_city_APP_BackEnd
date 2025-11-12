@@ -1,9 +1,10 @@
 package http
 
 import (
+	"net/http"
+
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"net/http"
 )
 
 func NewRouter(allowOrigins []string) *echo.Echo {
@@ -18,7 +19,8 @@ func NewRouter(allowOrigins []string) *echo.Echo {
 		}
 	}
 
-	e.Use(middleware.Logger())
+	registerLogging(e)
+
 	e.Use(middleware.Recover())
 	e.Use(middleware.Secure())
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
@@ -34,6 +36,8 @@ func NewRouter(allowOrigins []string) *echo.Echo {
 		AllowCredentials: allowCredentials,
 	}))
 
-	e.GET("/health", func(c echo.Context) error { return c.JSON(http.StatusOK, echo.Map{"ok": true}) })
+	e.GET("/health", func(c echo.Context) error {
+		return c.JSON(http.StatusOK, echo.Map{"ok": true})
+	})
 	return e
 }
