@@ -601,6 +601,10 @@ func (s *DestinationWorkflowService) validateFields(action domain.DestinationCha
 	return nil
 }
 
+func (s *DestinationWorkflowService) ValidateFields(action domain.DestinationChangeAction, fields domain.DestinationChangeFields, requireAll bool) error {
+	return s.validateFields(action, fields, requireAll)
+}
+
 func (s *DestinationWorkflowService) applyCreate(ctx context.Context, change *domain.DestinationChangeRequest, reviewerID uuid.UUID) (*domain.Destination, error) {
 	status := domain.DestinationStatusPublished
 	if change.Payload.Status != nil {

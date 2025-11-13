@@ -81,6 +81,7 @@ func main() {
 	destinationRepo := postgres.NewDestinationRepo(db)
 	destinationChangeRepo := postgres.NewDestinationChangeRepo(db)
 	destinationVersionRepo := postgres.NewDestinationVersionRepo(db)
+	destinationImportRepo := postgres.NewDestinationImportRepo(db)
 	reviewRepo := postgres.NewReviewRepo(db)
 	reviewMediaRepo := postgres.NewReviewMediaRepo(db)
 	favoriteRepo := postgres.NewFavoriteRepo(db)
@@ -112,6 +113,18 @@ func main() {
 	)
 
 	destinationService := service.NewDestinationService(destinationRepo)
+	importService := service.NewDestinationImportService(
+		destinationImportRepo,
+		destinationRepo,
+		workflowService,
+		objectStorage,
+		service.DestinationImportServiceConfig{
+			Bucket:        cfg.MinIOBucketDestinations,
+			MaxRows:       cfg.DestinationImportMaxRows,
+			MaxFileBytes:  cfg.DestinationImportMaxFileBytes,
+			MaxPendingIDs: cfg.DestinationImportMaxPendingIDs,
+		},
+	)
 	reviewService := service.NewReviewService(
 		reviewRepo,
 		reviewMediaRepo,
@@ -136,6 +149,7 @@ func main() {
 		Update: cfg.EnableDestinationUpdate,
 		Delete: cfg.EnableDestinationDelete,
 	})
+	httpx.RegisterDestinationImports(router, authService, importService, cfg.EnableDestinationBulkImport, cfg.DestinationImportMaxFileBytes)
 	httpx.RegisterReviews(router, authService, reviewService)
 	httpx.RegisterFavorites(router, authService, favoriteService)
 	httpx.RegisterSwagger(router)
