@@ -358,6 +358,111 @@ definitions:
         example: true
         type: boolean
     type: object
+  http.DestinationImportRow:
+    properties:
+      id:
+        example: 5c657fbd-94f5-4ab8-84c2-dc21b3c21039
+        type: string
+      job_id:
+        example: 35190d3f-1c71-4875-aeaf-d3f8ba0cc905
+        type: string
+      row_number:
+        example: 2
+        type: integer
+      status:
+        enum:
+        - pending_review
+        - skipped
+        - failed
+        type: string
+      action:
+        example: create
+        type: string
+      change_id:
+        example: a468173a-b413-4232-b294-084d47cdd941
+        type: string
+      error:
+        example: destination change validation failed
+        type: string
+      payload:
+        $ref: '#/definitions/http.DestinationChangeFields'
+    type: object
+  http.DestinationImportJob:
+    properties:
+      id:
+        example: 35190d3f-1c71-4875-aeaf-d3f8ba0cc905
+        type: string
+      uploaded_by:
+        example: 7a13808e-47f9-4af2-b146-8288dd053216
+        type: string
+      status:
+        enum:
+        - queued
+        - processing
+        - completed
+        - failed
+        type: string
+      dry_run:
+        type: boolean
+      file_key:
+        example: destinations/imports/35190d3f-1c71-4875-aeaf-d3f8ba0cc905/valid_import.csv
+        type: string
+      error_csv_key:
+        type: string
+      notes:
+        type: string
+      total_rows:
+        example: 2
+        type: integer
+      processed_rows:
+        example: 2
+        type: integer
+      rows_failed:
+        example: 1
+        type: integer
+      changes_created:
+        example: 1
+        type: integer
+      pending_change_ids:
+        items:
+          type: string
+        type: array
+      submitted_at:
+        example: "2025-11-13T17:51:20.243628Z"
+        type: string
+      completed_at:
+        example: "2025-11-13T17:51:20.253166Z"
+        type: string
+      created_at:
+        example: "2025-11-13T17:51:20.243718Z"
+        type: string
+      updated_at:
+        example: "2025-11-13T17:51:20.253259Z"
+        type: string
+    type: object
+  http.DestinationImportResponse:
+    properties:
+      job:
+        $ref: '#/definitions/http.DestinationImportJob'
+      rows:
+        items:
+          $ref: '#/definitions/http.DestinationImportRow'
+        type: array
+    type: object
+  http.DestinationImportTemplateResponse:
+    properties:
+      template:
+        properties:
+          headers:
+            items:
+              type: string
+            type: array
+          sample_row:
+            items:
+              type: string
+            type: array
+        type: object
+    type: object
   http.UsersListResponse:
     properties:
       meta:
@@ -1567,6 +1672,139 @@ paths:
       security:
       - BearerAuth: []
       summary: Upload gallery images for change request
+      tags:
+      - Admin Destinations
+  /admin/destination-imports/template:
+    get:
+      description: Download a CSV template with headers and a sample row for destination imports.
+      produces:
+      - text/csv
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get destination import template
+      tags:
+      - Admin Destinations
+  /admin/destination-imports:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload a CSV file to create destination drafts in bulk. Use the dry_run flag to validate without persisting change requests.
+      parameters:
+      - description: When true, validates the CSV without creating change requests.
+        in: query
+        name: dry_run
+        type: boolean
+      - description: CSV file containing destination rows.
+        in: formData
+        name: file
+        required: true
+        type: file
+      - description: Optional operator notes stored with the job.
+        in: formData
+        name: notes
+        type: string
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/http.DestinationImportResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Upload destination import CSV
+      tags:
+      - Admin Destinations
+  /admin/destination-imports/{id}:
+    get:
+      description: Fetch a destination import job and its row-level details.
+      parameters:
+      - description: Import job UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.DestinationImportResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get destination import job
+      tags:
+      - Admin Destinations
+  /admin/destination-imports/{id}/errors:
+    get:
+      description: Download a CSV describing all failed rows for a given import job.
+      parameters:
+      - description: Import job UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - text/csv
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Download destination import errors
       tags:
       - Admin Destinations
   /destinations/{destination_id}/favorites/count:

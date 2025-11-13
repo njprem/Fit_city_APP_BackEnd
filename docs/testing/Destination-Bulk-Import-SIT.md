@@ -7,13 +7,20 @@
 - All tests use the `ENABLE_DESTINATION_BULK_IMPORT` feature flag enabled and approval workflow requiring dual admins.
 
 ## 2. Test Data Foundation
-| Dataset | Description | Location |
+All canonical CSV test fixtures live under `docs/testing/data`.
+
+| Dataset | Description | Path |
 | --- | --- | --- |
-| `valid_create.csv` | 3 well-formed destinations with unique slugs, full metadata, <=3 gallery items. | `/tmp/bulk-import/valid_create.csv` |
-| `dry_run_only.csv` | Same as `valid_create.csv` but used with `dry_run=true`. | `/tmp/bulk-import/dry_run_only.csv` |
-| `validation_errors.csv` | Rows deliberately missing required fields (name, hero image, coordinates). | `/tmp/bulk-import/validation_errors.csv` |
-| `duplicate_slug.csv` | Two rows sharing a slug already present in prod + duplicate within file. | `/tmp/bulk-import/duplicate_slug.csv` |
-| `bad_headers.csv` | Header row missing `hero_image_url`. | `/tmp/bulk-import/bad_headers.csv` |
+| `valid_create.csv` | 3 well-formed destinations with unique slugs, full metadata, ≤3 gallery items. | `docs/testing/data/valid_create.csv` |
+| `dry_run_only.csv` | Same as `valid_create.csv` but used with `dry_run=true`. | `docs/testing/data/dry_run_only.csv` |
+| `validation_errors.csv` | Rows deliberately missing required fields (name, hero image, coordinates). | `docs/testing/data/validation_errors.csv` |
+| `bad_headers.csv` | Header row intentionally omits `hero_image_url`. | `docs/testing/data/bad_headers.csv` |
+| `duplicate_slug.csv` | One slug already published plus a duplicate slug within the same CSV. | `docs/testing/data/duplicate_slug.csv` |
+| `gallery_limit.csv` | Row populated with four gallery URLs to trigger the 3-image limit. | `docs/testing/data/gallery_limit.csv` |
+| `invalid_coordinates.csv` | Rows containing latitude >90 and longitude >180. | `docs/testing/data/invalid_coordinates.csv` |
+| `missing_hero_image.csv` | Row with blank `hero_image_url`. | `docs/testing/data/missing_hero_image.csv` |
+| `authz_featureflag.csv` | Single happy-path row used when verifying authorization/feature flags. | `docs/testing/data/authz_featureflag.csv` |
+| `retry_long.csv` | Ten valid rows to simulate long-running jobs/retry scenarios. | `docs/testing/data/retry_long.csv` |
 
 ## 3. Test Cases
 
