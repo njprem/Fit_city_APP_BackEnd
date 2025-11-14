@@ -10,11 +10,14 @@
 package main
 
 import (
+	"context"
 	"io"
 	"log"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/elastic/go-elasticsearch/v8"
 
 	"github.com/njprem/Fit_city_APP_BackEnd/internal/config"
 	"github.com/njprem/Fit_city_APP_BackEnd/internal/logging"
@@ -85,6 +88,38 @@ func main() {
 	reviewRepo := postgres.NewReviewRepo(db)
 	reviewMediaRepo := postgres.NewReviewMediaRepo(db)
 	favoriteRepo := postgres.NewFavoriteRepo(db)
+	viewStatsRepo := postgres.NewDestinationViewStatsRepo(db)
+
+	var esClient *elasticsearch.Client
+	if cfg.ElasticsearchBaseURL != "" {
+		esClient, err = elasticsearch.NewClient(elasticsearch.Config{
+			Addresses: []string{cfg.ElasticsearchBaseURL},
+		})
+		if err != nil {
+			log.Printf("elasticsearch client: %v", err)
+		}
+	}
+
+	viewStatsTimeout, err := time.ParseDuration(cfg.DestinationViewStatsTimeout)
+	if err != nil {
+		log.Printf("invalid DEST_VIEW_STATS_TIMEOUT, fallback to 5s: %v", err)
+		viewStatsTimeout = 5 * time.Second
+	}
+	viewStatsCacheTTL, err := time.ParseDuration(cfg.DestinationViewStatsCacheTTL)
+	if err != nil {
+		log.Printf("invalid DEST_VIEW_STATS_CACHE_TTL, fallback to 10m: %v", err)
+		viewStatsCacheTTL = 10 * time.Minute
+	}
+
+	viewStatsService := service.NewDestinationViewStatsService(
+		viewStatsRepo,
+		esClient,
+		service.DestinationViewStatsConfig{
+			LogIndex:       cfg.ElasticsearchLogIndex,
+			CacheTTL:       viewStatsCacheTTL,
+			RequestTimeout: viewStatsTimeout,
+		},
+	)
 
 	destinationPublicBase := cfg.MinIOPublicURL
 	if destinationPublicBase != "" && cfg.MinIOBucketProfile != "" {
@@ -152,7 +187,17 @@ func main() {
 	httpx.RegisterDestinationImports(router, authService, importService, cfg.EnableDestinationBulkImport, cfg.DestinationImportMaxFileBytes)
 	httpx.RegisterReviews(router, authService, reviewService)
 	httpx.RegisterFavorites(router, authService, favoriteService)
+	httpx.RegisterDestinationStats(router, authService, destinationService, viewStatsService)
 	httpx.RegisterSwagger(router)
+
+	if cfg.EnableDestinationViewStatsRollup {
+		rollupInterval, err := time.ParseDuration(cfg.DestinationViewStatsRollupInterval)
+		if err != nil || rollupInterval <= 0 {
+			log.Printf("invalid DEST_VIEW_STATS_ROLLUP_INTERVAL, fallback to 1h: %v", err)
+			rollupInterval = time.Hour
+		}
+		go viewStatsService.RunRollup(context.Background(), rollupInterval)
+	}
 
 	router.Logger.Fatal(router.Start(":" + cfg.Port))
 }

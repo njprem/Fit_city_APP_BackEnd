@@ -1,7 +1,7 @@
 BEGIN;
 
 CREATE TABLE IF NOT EXISTS destination_view_stats (
-    destination_id UUID NOT NULL REFERENCES destination(id),
+    destination_id UUID NOT NULL REFERENCES travel_destination(id),
     range_key TEXT NOT NULL,
     bucket_start TIMESTAMPTZ NOT NULL,
     bucket_end TIMESTAMPTZ NOT NULL,
