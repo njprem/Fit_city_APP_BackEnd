@@ -18,6 +18,8 @@ type Config struct {
 	LogstashTCPAddr                    string
 	ElasticsearchBaseURL               string
 	ElasticsearchLogIndex              string
+	ElasticsearchUsername              string
+	ElasticsearchPassword              string
 	MinIOEndpoint                      string
 	MinIOAccessKey                     string
 	MinIOSecretKey                     string
@@ -112,6 +114,8 @@ func Load() Config {
 		LogstashTCPAddr:                    getenv("LOGSTASH_TCP_ADDR", ""),
 		ElasticsearchBaseURL:               getenv("ELASTICSEARCH_BASE_URL", "http://localhost:9200"),
 		ElasticsearchLogIndex:              getenv("ELASTICSEARCH_LOG_INDEX", "app-logs-*"),
+		ElasticsearchUsername:              getenv("ELASTICSEARCH_USERNAME", ""),
+		ElasticsearchPassword:              getenv("ELASTICSEARCH_PASSWORD", ""),
 		MinIOEndpoint:                      must("MINIO_ENDPOINT"),
 		MinIOAccessKey:                     must("MINIO_ACCESS_KEY"),
 		MinIOSecretKey:                     must("MINIO_SECRET_KEY"),

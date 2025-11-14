@@ -92,9 +92,14 @@ func main() {
 
 	var esClient *elasticsearch.Client
 	if cfg.ElasticsearchBaseURL != "" {
-		esClient, err = elasticsearch.NewClient(elasticsearch.Config{
+		esConfig := elasticsearch.Config{
 			Addresses: []string{cfg.ElasticsearchBaseURL},
-		})
+		}
+		if cfg.ElasticsearchUsername != "" || cfg.ElasticsearchPassword != "" {
+			esConfig.Username = cfg.ElasticsearchUsername
+			esConfig.Password = cfg.ElasticsearchPassword
+		}
+		esClient, err = elasticsearch.NewClient(esConfig)
 		if err != nil {
 			log.Printf("elasticsearch client: %v", err)
 		}
