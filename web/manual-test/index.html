@@ -264,6 +264,7 @@
       <button class="tab-button" data-tab="importTab">Destination Imports</button>
       <button class="tab-button" data-tab="reviewsTab">Reviews</button>
       <button class="tab-button" data-tab="favoritesTab">Favorites</button>
+      <button class="tab-button" data-tab="viewStatsTab">Destination View Stats</button>
     </div>
 
     <div id="authTab" class="tab-panel active">
@@ -811,6 +812,51 @@
           <input id="favoritesCountDestinationId" type="text" placeholder="uuid" />
           <button id="favoritesCountSubmit" type="button">Fetch count</button>
           <pre id="favoritesCountResult"></pre>
+        </section>
+      </div>
+    </div>
+    <div id="viewStatsTab" class="tab-panel">
+      <div class="panel-grid">
+        <section>
+          <h2>Public View Lookup</h2>
+          <p class="muted">Calls <code>/api/v1/destinations/{identifier}/views</code>. Use either UUID or slug.</p>
+          <label for="viewStatsDestinationId">Destination ID or slug</label>
+          <input id="viewStatsDestinationId" type="text" placeholder="uuid or slug" />
+          <label for="viewStatsRange">Ranges (optional)</label>
+          <input id="viewStatsRange" type="text" placeholder="1h,6h,12h,24h,7d,30d,all" />
+          <button id="viewStatsFetchSubmit" type="button">Fetch stats</button>
+          <pre id="viewStatsResult"></pre>
+        </section>
+
+        <section>
+          <h2>Trending Destinations</h2>
+          <p class="muted">Calls <code>/api/v1/destinations/trending</code> to list popular destinations.</p>
+          <label for="viewStatsTrendingRange">Range</label>
+          <input id="viewStatsTrendingRange" type="text" placeholder="24h" />
+          <label for="viewStatsTrendingLimit">Limit</label>
+          <input id="viewStatsTrendingLimit" type="number" min="1" value="10" />
+          <button id="viewStatsTrendingSubmit" type="button">List trending</button>
+          <pre id="viewStatsTrendingResult"></pre>
+        </section>
+
+        <section>
+          <h2>Admin Destination Stats</h2>
+          <p class="muted">Requires an admin token. Forces an Elasticsearch refresh before returning data.</p>
+          <label for="viewStatsAdminDestinationId">Destination ID</label>
+          <input id="viewStatsAdminDestinationId" type="text" placeholder="uuid" />
+          <label for="viewStatsAdminRange">Range (optional)</label>
+          <input id="viewStatsAdminRange" type="text" placeholder="all" />
+          <button id="viewStatsAdminSubmit" type="button">Fetch admin stats</button>
+          <pre id="viewStatsAdminResult"></pre>
+        </section>
+
+        <section>
+          <h2>Export Popularity CSV</h2>
+          <p class="muted">Calls <code>/api/v1/admin/destination-stats/export</code>. Leave destination list empty to export all published destinations.</p>
+          <label for="viewStatsExportIds">Destination IDs (comma or newline separated)</label>
+          <textarea id="viewStatsExportIds" placeholder="e3ff134a-bbd0-46f4-9586-2414627acafd&#10;8cda9899-6533-4ed2-bf3e-85ee68588b79"></textarea>
+          <button id="viewStatsExportSubmit" type="button">Download CSV</button>
+          <pre id="viewStatsExportResult"></pre>
         </section>
       </div>
     </div>
@@ -2344,6 +2390,113 @@
       const result = await request(`/api/v1/destinations/${destId}/favorites/count`);
       if ($('favoritesCountResult')) {
         $('favoritesCountResult').textContent = pretty(result);
+      }
+    });
+
+    attachClick('viewStatsFetchSubmit', async () => {
+      const identifier = $('viewStatsDestinationId').value.trim();
+      if (!identifier) {
+        if ($('viewStatsResult')) {
+          $('viewStatsResult').textContent = pretty({ status: 0, body: 'Destination identifier is required' });
+        }
+        return;
+      }
+      const encoded = encodeURIComponent(identifier);
+      const range = $('viewStatsRange').value.trim();
+      const params = range ? `?range=${encodeURIComponent(range)}` : '';
+      const result = await request(`/api/v1/destinations/${encoded}/views${params}`);
+      if ($('viewStatsResult')) {
+        $('viewStatsResult').textContent = pretty(result);
+      }
+    });
+
+    attachClick('viewStatsTrendingSubmit', async () => {
+      const params = new URLSearchParams();
+      const range = $('viewStatsTrendingRange').value.trim();
+      if (range) {
+        params.set('range', range);
+      }
+      const limitValue = parseInt($('viewStatsTrendingLimit').value, 10);
+      if (!Number.isNaN(limitValue) && limitValue > 0) {
+        params.set('limit', String(limitValue));
+      }
+      const query = params.toString();
+      const result = await request(`/api/v1/destinations/trending${query ? `?${query}` : ''}`);
+      if ($('viewStatsTrendingResult')) {
+        $('viewStatsTrendingResult').textContent = pretty(result);
+      }
+    });
+
+    attachClick('viewStatsAdminSubmit', async () => {
+      const destId = $('viewStatsAdminDestinationId').value.trim();
+      if (!destId) {
+        if ($('viewStatsAdminResult')) {
+          $('viewStatsAdminResult').textContent = pretty({ status: 0, body: 'Destination ID is required' });
+        }
+        return;
+      }
+      const params = new URLSearchParams({ destination_id: destId });
+      const range = $('viewStatsAdminRange').value.trim();
+      if (range) {
+        params.set('range', range);
+      }
+      const result = await request(`/api/v1/admin/destination-stats/views?${params.toString()}`);
+      if ($('viewStatsAdminResult')) {
+        $('viewStatsAdminResult').textContent = pretty(result);
+      }
+    });
+
+    attachClick('viewStatsExportSubmit', async () => {
+      const raw = $('viewStatsExportIds').value || '';
+      const ids = raw
+        .split(/[\s,]+/)
+        .map((value) => value.trim())
+        .filter(Boolean);
+      const payload = ids.length ? { destination_ids: ids } : {};
+      const base = $('baseUrl').value.replace(/\/$/, '');
+      const headers = { 'Content-Type': 'application/json' };
+      if (state.token) {
+        headers['Authorization'] = `Bearer ${state.token}`;
+      }
+      try {
+        const response = await fetch(`${base}/api/v1/admin/destination-stats/export`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(payload),
+        });
+        const contentType = (response.headers.get('content-type') || '').toLowerCase();
+        if (response.ok && contentType.includes('text/csv')) {
+          const blob = await response.blob();
+          const objectUrl = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = objectUrl;
+          link.download = `destination-view-stats-${Date.now()}.csv`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+          if ($('viewStatsExportResult')) {
+            $('viewStatsExportResult').textContent = pretty({ status: response.status, body: 'CSV downloaded' });
+          }
+          return;
+        }
+        let bodyText;
+        try {
+          bodyText = await response.text();
+        } catch (err) {
+          bodyText = err.message;
+        }
+        let parsed = bodyText;
+        try {
+          parsed = JSON.parse(bodyText);
+        } catch {}
+        if ($('viewStatsExportResult')) {
+          $('viewStatsExportResult').textContent = pretty({ status: response.status, body: parsed });
+        }
+      } catch (error) {
+        if ($('viewStatsExportResult')) {
+          $('viewStatsExportResult').textContent = pretty({ status: 0, body: error.message || String(error) });
+        }
       }
     });
 

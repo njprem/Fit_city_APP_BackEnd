@@ -358,6 +358,81 @@ definitions:
         example: true
         type: boolean
     type: object
+  http.DestinationViewCount:
+    properties:
+      last_updated_at:
+        example: "2025-11-12T03:35:49Z"
+        type: string
+      total_views:
+        example: 1287
+        format: int64
+        type: integer
+      unique_ips:
+        example: 342
+        type: integer
+      unique_users:
+        example: 12
+        type: integer
+    type: object
+  http.DestinationViewStatsResponse:
+    properties:
+      city:
+        example: Bangkok
+        type: string
+      country:
+        example: Thailand
+        type: string
+      destination_id:
+        example: e3ff134a-bbd0-46f4-9586-2414627acafd
+        type: string
+      name:
+        example: Manual Test Destination
+        type: string
+      views:
+        additionalProperties:
+          $ref: '#/definitions/http.DestinationViewCount'
+        type: object
+    type: object
+  http.TrendingDestination:
+    properties:
+      city:
+        example: Chiang Mai
+        type: string
+      country:
+        example: Thailand
+        type: string
+      destination_id:
+        example: 8cda9899-6533-4ed2-bf3e-85ee68588b79
+        type: string
+      name:
+        example: Ao Manao - Khao Tanyong National Park
+        type: string
+      views:
+        additionalProperties:
+          $ref: '#/definitions/http.DestinationViewCount'
+        type: object
+    type: object
+  http.DestinationTrendingResponse:
+    properties:
+      destinations:
+        items:
+          $ref: '#/definitions/http.TrendingDestination'
+        type: array
+      limit:
+        example: 10
+        type: integer
+      range:
+        example: 24h
+        type: string
+    type: object
+  http.DestinationStatsExportRequest:
+    properties:
+      destination_ids:
+        items:
+          example: e3ff134a-bbd0-46f4-9586-2414627acafd
+          type: string
+        type: array
+    type: object
   http.DestinationImportRow:
     properties:
       id:
@@ -1357,6 +1432,63 @@ paths:
       summary: Create review
       tags:
       - Reviews
+  /destinations/{identifier}/views:
+    get:
+      description: Return aggregated view counts for a published destination using its UUID or slug.
+      parameters:
+      - description: Destination UUID or slug
+        in: path
+        name: identifier
+        required: true
+        type: string
+      - description: Comma-separated view ranges to include (1h,6h,12h,24h,7d,30d,all). Defaults to all ranges when omitted.
+        in: query
+        name: range
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.DestinationViewStatsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Get destination view stats
+      tags:
+      - Destinations
+  /destinations/trending:
+    get:
+      description: List the most-viewed destinations for a given time window.
+      parameters:
+      - description: View range (1h,6h,12h,24h,7d,30d,all). Defaults to all-time when omitted.
+        in: query
+        name: range
+        type: string
+      - description: Maximum number of destinations to return (default 10).
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.DestinationTrendingResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: List trending destinations
+      tags:
+      - Destinations
   /reviews/{id}:
     delete:
       description: Soft delete a review. Only the author or an administrator may delete a review.
@@ -1672,6 +1804,78 @@ paths:
       security:
       - BearerAuth: []
       summary: Upload gallery images for change request
+      tags:
+      - Admin Destinations
+  /admin/destination-stats/views:
+    get:
+      description: Return destination view metrics for admins with a forced Elasticsearch refresh.
+      parameters:
+      - description: Destination UUID
+        in: query
+        name: destination_id
+        required: true
+        type: string
+      - description: Optional range filter (1h,6h,12h,24h,7d,30d,all). Defaults to all-time.
+        in: query
+        name: range
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.DestinationViewStatsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Admin destination view stats
+      tags:
+      - Admin Destinations
+  /admin/destination-stats/export:
+    post:
+      consumes:
+      - application/json
+      description: Export destination popularity metrics as CSV for the requested destinations. When no body is provided, all published destinations are included.
+      parameters:
+      - description: Optional list of destination IDs to include
+        in: body
+        name: data
+        schema:
+          $ref: '#/definitions/http.DestinationStatsExportRequest'
+      produces:
+      - text/csv
+      responses:
+        "200":
+          description: CSV export
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Export destination popularity
       tags:
       - Admin Destinations
   /admin/destination-imports/template:
