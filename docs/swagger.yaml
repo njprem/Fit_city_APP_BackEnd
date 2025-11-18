@@ -470,6 +470,13 @@ definitions:
       uploaded_by:
         example: 7a13808e-47f9-4af2-b146-8288dd053216
         type: string
+      submitted_by:
+        example: 7a13808e-47f9-4af2-b146-8288dd053216
+        type: string
+      submitted_by_full_name:
+        type: string
+      submitted_by_username:
+        type: string
       status:
         enum:
         - queued
@@ -810,6 +817,14 @@ definitions:
       submitted_at:
         type: string
       submitted_by:
+        type: string
+      submitted_by_full_name:
+        type: string
+      submitted_by_username:
+        type: string
+      reviewed_by_full_name:
+        type: string
+      reviewed_by_username:
         type: string
       updated_at:
         example: "2024-07-11T08:00:00Z"

@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -248,8 +249,13 @@ func (h *DestinationHandler) getChange(c echo.Context) error {
 	if err != nil {
 		return h.writeChangeError(c, err)
 	}
+
+	resp := buildChangeResponse(change)
+	if err := h.addChangeUserDetails(c.Request().Context(), []util.Envelope{resp}, []*domain.DestinationChangeRequest{change}); err != nil {
+		return c.JSON(http.StatusInternalServerError, util.Error("unable to load change metadata"))
+	}
 	return c.JSON(http.StatusOK, util.Envelope{
-		"change_request": buildChangeResponse(change),
+		"change_request": resp,
 	})
 }
 
@@ -290,8 +296,14 @@ func (h *DestinationHandler) listChanges(c echo.Context) error {
 	}
 
 	payload := make([]util.Envelope, 0, len(changes))
+	changePtrs := make([]*domain.DestinationChangeRequest, 0, len(changes))
 	for i := range changes {
 		payload = append(payload, buildChangeResponse(&changes[i]))
+		changePtrs = append(changePtrs, &changes[i])
+	}
+
+	if err := h.addChangeUserDetails(c.Request().Context(), payload, changePtrs); err != nil {
+		return c.JSON(http.StatusInternalServerError, util.Error("unable to load change metadata"))
 	}
 
 	return c.JSON(http.StatusOK, util.Envelope{
@@ -739,6 +751,70 @@ func buildChangeResponse(change *domain.DestinationChangeRequest) util.Envelope 
 		resp["published_version"] = *change.PublishedVersion
 	}
 	return resp
+}
+
+func (h *DestinationHandler) addChangeUserDetails(ctx context.Context, responses []util.Envelope, changes []*domain.DestinationChangeRequest) error {
+	if len(responses) == 0 || len(changes) == 0 || h.auth == nil {
+		return nil
+	}
+
+	ids := make([]uuid.UUID, 0, len(changes)*2)
+	seen := make(map[uuid.UUID]struct{})
+	for _, change := range changes {
+		if change == nil {
+			continue
+		}
+		if _, ok := seen[change.SubmittedBy]; !ok {
+			seen[change.SubmittedBy] = struct{}{}
+			ids = append(ids, change.SubmittedBy)
+		}
+		if change.ReviewedBy != nil {
+			if _, ok := seen[*change.ReviewedBy]; !ok {
+				seen[*change.ReviewedBy] = struct{}{}
+				ids = append(ids, *change.ReviewedBy)
+			}
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	users, err := h.auth.GetUsersByIDs(ctx, ids)
+	if err != nil {
+		return err
+	}
+	count := len(responses)
+	if len(changes) < count {
+		count = len(changes)
+	}
+	for i := 0; i < count; i++ {
+		applyChangeUserSummary(responses[i], changes[i], users)
+	}
+	return nil
+}
+
+func applyChangeUserSummary(resp util.Envelope, change *domain.DestinationChangeRequest, users map[uuid.UUID]*domain.User) {
+	if resp == nil || change == nil || len(users) == 0 {
+		return
+	}
+	if user, ok := users[change.SubmittedBy]; ok && user != nil {
+		if user.FullName != nil {
+			resp["submitted_by_full_name"] = *user.FullName
+		}
+		if user.Username != nil {
+			resp["submitted_by_username"] = *user.Username
+		}
+	}
+	if change.ReviewedBy != nil {
+		if user, ok := users[*change.ReviewedBy]; ok && user != nil {
+			if user.FullName != nil {
+				resp["reviewed_by_full_name"] = *user.FullName
+			}
+			if user.Username != nil {
+				resp["reviewed_by_username"] = *user.Username
+			}
+		}
+	}
 }
 
 func buildChangeFields(fields domain.DestinationChangeFields) util.Envelope {

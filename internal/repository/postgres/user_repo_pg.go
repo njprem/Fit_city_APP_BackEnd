@@ -91,6 +91,36 @@ func (r *UserRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.Us
 	return &user, nil
 }
 
+func (r *UserRepository) ListByIDs(ctx context.Context, ids []uuid.UUID) ([]domain.User, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	query, args, err := sqlx.In(`
+        SELECT ua.id, ua.email, ua.username, ua.full_name, ua.user_image_url,
+               ua.profile_completed, ua.created_at, ua.updated_at
+        FROM user_account ua
+        WHERE ua.id IN (?)
+    `, ids)
+	if err != nil {
+		return nil, err
+	}
+	query = r.db.Rebind(query)
+
+	users := make([]domain.User, 0, len(ids))
+	if err := r.db.SelectContext(ctx, &users, query, args...); err != nil {
+		return nil, err
+	}
+	userPtrs := make([]*domain.User, 0, len(users))
+	for i := range users {
+		userPtrs = append(userPtrs, &users[i])
+	}
+	if err := r.attachRoles(ctx, userPtrs); err != nil {
+		return nil, err
+	}
+	return users, nil
+}
+
 func (r *UserRepository) UpdateProfile(ctx context.Context, id uuid.UUID, fullName *string, username *string, imageURL *string, profileCompleted bool) (*domain.User, error) {
 	const query = `
         UPDATE user_account

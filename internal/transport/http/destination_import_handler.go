@@ -18,6 +18,7 @@ import (
 )
 
 type DestinationImportHandler struct {
+	auth          *service.AuthService
 	service       *service.DestinationImportService
 	maxUploadSize int64
 }
@@ -27,6 +28,7 @@ func RegisterDestinationImports(e *echo.Echo, auth *service.AuthService, svc *se
 		return
 	}
 	handler := &DestinationImportHandler{
+		auth:          auth,
 		service:       svc,
 		maxUploadSize: maxUpload,
 	}
@@ -113,7 +115,7 @@ func (h *DestinationImportHandler) create(c echo.Context) error {
 		return h.writeError(c, err)
 	}
 	return c.JSON(http.StatusAccepted, util.Envelope{
-		"job":  buildImportJob(job),
+		"job":  buildImportJob(job, user),
 		"rows": buildImportRows(rows),
 	})
 }
@@ -127,8 +129,16 @@ func (h *DestinationImportHandler) getJob(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusNotFound, util.Error("import job not found"))
 	}
+	var uploader *domain.User
+	if h.auth != nil {
+		users, lookupErr := h.auth.GetUsersByIDs(c.Request().Context(), []uuid.UUID{job.UploadedBy})
+		if lookupErr != nil {
+			return c.JSON(http.StatusInternalServerError, util.Error("unable to load job submitter"))
+		}
+		uploader = users[job.UploadedBy]
+	}
 	return c.JSON(http.StatusOK, util.Envelope{
-		"job":  buildImportJob(job),
+		"job":  buildImportJob(job, uploader),
 		"rows": buildImportRows(rows),
 	})
 }
@@ -178,9 +188,10 @@ func (h *DestinationImportHandler) writeError(c echo.Context, err error) error {
 	}
 }
 
-func buildImportJob(job *domain.DestinationImportJob) util.Envelope {
+func buildImportJob(job *domain.DestinationImportJob, uploader *domain.User) util.Envelope {
 	resp := util.Envelope{
 		"id":              job.ID,
+		"submitted_by":    job.UploadedBy,
 		"uploaded_by":     job.UploadedBy,
 		"status":          job.Status,
 		"dry_run":         job.DryRun,
@@ -204,6 +215,14 @@ func buildImportJob(job *domain.DestinationImportJob) util.Envelope {
 	}
 	if len(job.PendingIDs) > 0 {
 		resp["pending_change_ids"] = job.PendingIDs
+	}
+	if uploader != nil {
+		if uploader.FullName != nil {
+			resp["submitted_by_full_name"] = *uploader.FullName
+		}
+		if uploader.Username != nil {
+			resp["submitted_by_username"] = *uploader.Username
+		}
 	}
 	return resp
 }

@@ -540,6 +540,36 @@ func (s *AuthService) ListUsers(ctx context.Context, limit, offset int) ([]domai
 	return s.users.List(ctx, limit, offset)
 }
 
+func (s *AuthService) GetUsersByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]*domain.User, error) {
+	unique := make([]uuid.UUID, 0, len(ids))
+	seen := make(map[uuid.UUID]struct{}, len(ids))
+	for _, id := range ids {
+		if id == uuid.Nil {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+	if len(unique) == 0 {
+		return map[uuid.UUID]*domain.User{}, nil
+	}
+
+	users, err := s.users.ListByIDs(ctx, unique)
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[uuid.UUID]*domain.User, len(users))
+	for i := range users {
+		user := users[i]
+		u := user
+		result[user.ID] = &u
+	}
+	return result, nil
+}
+
 func (s *AuthService) DeleteUser(ctx context.Context, actor *domain.User, target uuid.UUID) error {
 	if actor == nil {
 		return ErrForbidden

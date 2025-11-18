@@ -13,6 +13,7 @@ type UserRepository interface {
 	UpsertGoogleUser(ctx context.Context, email string, fullName *string, imageURL *string) (*domain.User, error)
 	FindByEmail(ctx context.Context, email string) (*domain.User, error)
 	FindByID(ctx context.Context, id uuid.UUID) (*domain.User, error)
+	ListByIDs(ctx context.Context, ids []uuid.UUID) ([]domain.User, error)
 	UpdateProfile(ctx context.Context, id uuid.UUID, fullName *string, username *string, imageURL *string, profileCompleted bool) (*domain.User, error)
 	UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash, passwordSalt []byte) error
 	List(ctx context.Context, limit, offset int) ([]domain.User, error)
