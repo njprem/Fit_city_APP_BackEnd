@@ -702,6 +702,14 @@ func parseDestinationListFilter(c echo.Context) (domain.DestinationListFilter, e
 		}
 	}
 
+	if v := strings.TrimSpace(c.QueryParam("city")); v != "" {
+		filter.City = &v
+	}
+
+	if v := strings.TrimSpace(c.QueryParam("country")); v != "" {
+		filter.Country = &v
+	}
+
 	return filter, nil
 }
 

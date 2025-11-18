@@ -120,5 +120,7 @@ type DestinationListFilter struct {
 	Categories []string
 	MinRating  *float64
 	MaxRating  *float64
+	City       *string
+	Country    *string
 	Sort       DestinationListSort
 }

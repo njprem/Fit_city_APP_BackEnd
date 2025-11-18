@@ -314,6 +314,24 @@ func (r *DestinationRepository) ListPublished(ctx context.Context, limit, offset
 		}
 	}
 
+	if filter.City != nil {
+		city := strings.TrimSpace(*filter.City)
+		if city != "" {
+			placeholder := fmt.Sprintf("$%d", len(params)+1)
+			builder.WriteString("\n\tAND d.city ILIKE " + placeholder)
+			params = append(params, "%"+city+"%")
+		}
+	}
+
+	if filter.Country != nil {
+		country := strings.TrimSpace(*filter.Country)
+		if country != "" {
+			placeholder := fmt.Sprintf("$%d", len(params)+1)
+			builder.WriteString("\n\tAND d.country ILIKE " + placeholder)
+			params = append(params, "%"+country+"%")
+		}
+	}
+
 	builder.WriteString(`
 		GROUP BY d.id
 	`)
