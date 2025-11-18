@@ -388,6 +388,61 @@ func (r *DestinationRepository) ListPublished(ctx context.Context, limit, offset
 	return destinations, nil
 }
 
+func (r *DestinationRepository) Autocomplete(ctx context.Context, query string, limit int) ([]string, error) {
+	q := strings.TrimSpace(query)
+	args := []any{q, limit}
+
+	sql := `
+		SELECT DISTINCT suggestion
+		FROM (
+			SELECT
+				name AS suggestion,
+				similarity(name, $1) AS score
+			FROM travel_destination
+			WHERE status = 'published' AND name IS NOT NULL
+
+			UNION
+			SELECT
+				city AS suggestion,
+				similarity(city, $1) AS score
+			FROM travel_destination
+			WHERE status = 'published' AND city IS NOT NULL
+
+			UNION
+			SELECT
+				country AS suggestion,
+				similarity(country, $1) AS score
+			FROM travel_destination
+			WHERE status = 'published' AND country IS NOT NULL
+		) AS s
+		WHERE suggestionn ILIKE '%' || $1 || '%'
+		ORDER BY score DESC
+		LIMIT $2;
+	`
+
+	var results []string
+	if err := r.db.SelectContext(ctx, &results, sql, args...); err != nil {
+		return nil, err
+	}
+
+	if len(results) == 0 {
+		sql = `
+			SELECT name
+			FROM travel_destination
+			WHERE status = 'published'
+				AND name ILIKE '%' || $1 || '$'
+			ORDER BY name ASC
+			LIMIT $2
+		`
+
+		if err := r.db.SelectContext(ctx, &results, sql, args...); err != nil {
+			return nil, err
+		}
+	}
+
+	return results, nil
+}
+
 func valueOrDefault(ptr *string, fallback string) string {
 	if ptr == nil || strings.TrimSpace(*ptr) == "" {
 		return fallback

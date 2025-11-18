@@ -41,6 +41,7 @@ func RegisterDestinations(e *echo.Echo, auth *service.AuthService, destService *
 
 	if features.View {
 		public := e.Group("/api/v1/destinations")
+		public.GET("/autocomplete", handler.Autocomplete)
 		public.GET("", handler.listPublished)
 		public.GET("/:id", handler.getDestination)
 	}
@@ -528,6 +529,29 @@ func (h *DestinationHandler) isActionEnabled(action domain.DestinationChangeActi
 	default:
 		return false
 	}
+}
+
+func (h *DestinationHandler) Autocomplete(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	query := strings.TrimSpace(c.QueryParam("query"))
+	if query == "" {
+		return c.JSON(http.StatusOK, []string{})
+	}
+
+	limit := 5
+	if v := c.QueryParam("limit"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+
+	suggestions, err := h.destinations.Autocomplete(ctx, query, limit)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, suggestions)
 }
 
 func parsePagination(c echo.Context, defaultLimit, defaultOffset int) (int, int) {
