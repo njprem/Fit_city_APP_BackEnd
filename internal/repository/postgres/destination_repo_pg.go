@@ -293,6 +293,7 @@ func (r *DestinationRepository) ListPublished(ctx context.Context, limit, offset
 			COALESCE(d.category, '') || ' ' ||
 			COALESCE(d.description, '')
 		) @@ plainto_tsquery('simple', ` + placeholder + `)
+		 OR similarity(d.name, ` + placeholder + `) > 0.2
 		`)
 		params = append(params, trimmed)
 	}
@@ -342,6 +343,15 @@ func (r *DestinationRepository) ListPublished(ctx context.Context, limit, offset
 		builder.WriteString("d.name ASC")
 	case domain.DestinationSortNameDesc:
 		builder.WriteString("d.name DESC")
+	case domain.DestinationSortSimilarity:
+		trimmed := strings.TrimSpace(filter.Search)
+		if trimmed != "" {
+			placeholder := fmt.Sprintf("$%d", len(params)+1)
+			builder.WriteString("similarity(d.name, " + placeholder + ") DESC, d.name ASC")
+			params = append(params, trimmed)
+		} else {
+			builder.WriteString("d.updated_at DESC")
+		}
 	default:
 		builder.WriteString("d.updated_at DESC")
 	}

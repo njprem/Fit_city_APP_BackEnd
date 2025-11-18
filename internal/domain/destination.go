@@ -98,6 +98,7 @@ const (
 	DestinationSortRatingAsc     DestinationListSort = "rating_asc"
 	DestinationSortNameAsc       DestinationListSort = "name_asc"
 	DestinationSortNameDesc      DestinationListSort = "name_desc"
+	DestinationSortSimilarity    DestinationListSort = "similarity"
 )
 
 func (s DestinationListSort) IsValid() bool {
@@ -106,7 +107,8 @@ func (s DestinationListSort) IsValid() bool {
 		DestinationSortRatingDesc,
 		DestinationSortRatingAsc,
 		DestinationSortNameAsc,
-		DestinationSortNameDesc:
+		DestinationSortNameDesc,
+		DestinationSortSimilarity:
 		return true
 	default:
 		return false
