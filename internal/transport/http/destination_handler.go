@@ -721,6 +721,8 @@ func parseDestinationListFilter(c echo.Context) (domain.DestinationListFilter, e
 			filter.Sort = domain.DestinationSortUpdatedAtDesc
 		case string(domain.DestinationSortSimilarity), "relevance", "relevant":
 			filter.Sort = domain.DestinationSortSimilarity
+		case string(domain.DestinationSortDistanceAsc), "distance", "nearby":
+			filter.Sort = domain.DestinationSortDistanceAsc
 		default:
 			return domain.DestinationListFilter{}, fmt.Errorf("invalid sort value %q", raw)
 		}
@@ -732,6 +734,46 @@ func parseDestinationListFilter(c echo.Context) (domain.DestinationListFilter, e
 
 	if v := strings.TrimSpace(c.QueryParam("country")); v != "" {
 		filter.Country = &v
+	}
+
+	if v := strings.TrimSpace(c.QueryParam("lat")); v != "" {
+		parsed, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return domain.DestinationListFilter{}, errors.New("lat must be a number")
+		}
+		if parsed < -90 || parsed > 90 {
+			return domain.DestinationListFilter{}, errors.New("lat must be between -90 and 90")
+		}
+		filter.Latitude = &parsed
+	}
+
+	if v := strings.TrimSpace(c.QueryParam("lng")); v != "" {
+		parsed, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return domain.DestinationListFilter{}, errors.New("lng must be a number")
+		}
+		if parsed < -180 || parsed > 180 {
+			return domain.DestinationListFilter{}, errors.New("lng must be between -180 and 180")
+		}
+		filter.Longitude = &parsed
+	}
+
+	if v := strings.TrimSpace(c.QueryParam("max_distance_km")); v != "" {
+		parsed, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return domain.DestinationListFilter{}, errors.New("max_distance_km must be a number")
+		}
+		if parsed <= 0 {
+			return domain.DestinationListFilter{}, errors.New("max_distance_km must be greater than 0")
+		}
+		filter.MaxDistanceKM = &parsed
+	}
+
+	if (filter.Latitude == nil) != (filter.Longitude == nil) {
+		return domain.DestinationListFilter{}, errors.New("both lat and lng must be provided for geo search")
+	}
+	if filter.MaxDistanceKM != nil && filter.Latitude == nil {
+		return domain.DestinationListFilter{}, errors.New("lat and lng are required when max_distance_km is set")
 	}
 
 	return filter, nil

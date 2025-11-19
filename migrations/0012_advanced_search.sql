@@ -22,4 +22,7 @@ CREATE INDEX IF NOT EXISTS idx_destination_country_trgm
     ON travel_destination
     USING GIN (country gin_trgm_ops);
 
+CREATE INDEX IF NOT EXISTS idx__destination_lat_lng
+    ON travel_destination (latitude, longitude);
+
 COMMIT;

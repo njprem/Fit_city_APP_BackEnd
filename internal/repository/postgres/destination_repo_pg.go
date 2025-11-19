@@ -332,6 +332,22 @@ func (r *DestinationRepository) ListPublished(ctx context.Context, limit, offset
 		}
 	}
 
+	if filter.MaxDistanceKM != nil && filter.Latitude != nil && filter.Longitude != nil {
+		latPlaceholder := fmt.Sprintf("$%d", len(params)+1)
+		lngPlaceholder := fmt.Sprintf("$%d", len(params)+2)
+		distPlaceholder := fmt.Sprintf("$%d", len(params)+3)
+
+		builder.WriteString(`
+			AND d.latitude IS NOT NULL AND d.longitude IS NOT NULL
+			AND (6371 * acos(
+				cos(radians(` + latPlaceholder + `)) * cos(radians(d.latitude)) *
+				cos(radians(d.longitude) - radians(` + lngPlaceholder + `)) +
+				sin(radians(` + latPlaceholder + `)) * sin(radians(d.latitude)) 
+			)) <= ` + distPlaceholder + `
+		`)
+		params = append(params, *filter.Latitude, *filter.Longitude, *filter.MaxDistanceKM)
+	}
+
 	builder.WriteString(`
 		GROUP BY d.id
 	`)
@@ -367,8 +383,19 @@ func (r *DestinationRepository) ListPublished(ctx context.Context, limit, offset
 			placeholder := fmt.Sprintf("$%d", len(params)+1)
 			builder.WriteString("similarity(d.name, " + placeholder + ") DESC, d.name ASC")
 			params = append(params, trimmed)
-		} else {
-			builder.WriteString("d.updated_at DESC")
+		}
+	case domain.DestinationSortDistanceAsc:
+		if filter.Latitude != nil && filter.Longitude != nil {
+			latPlaceholder := fmt.Sprintf("$%d", len(params)+1)
+			lngPlaceholder := fmt.Sprintf("$%d", len(params)+2)
+
+			builder.WriteString(`
+				(6371 * acos(
+					cos(radians(` + latPlaceholder + `)) * cos(radians(d.latitude)) *
+					cos(radians(d.longitude) - radians(` + lngPlaceholder + `)) + 
+					sin(radians(` + latPlaceholder + `)) * sin(radians(d.latitude))
+				)) ASc, d.name ASC
+			`)
 		}
 	default:
 		builder.WriteString("d.updated_at DESC")
