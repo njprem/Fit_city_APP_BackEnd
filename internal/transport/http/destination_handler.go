@@ -721,7 +721,7 @@ func parseDestinationListFilter(c echo.Context) (domain.DestinationListFilter, e
 			filter.Sort = domain.DestinationSortUpdatedAtDesc
 		case string(domain.DestinationSortSimilarity), "relevance", "relevant":
 			filter.Sort = domain.DestinationSortSimilarity
-		case string(domain.DestinationSortDistanceAsc), "distance", "nearby":
+		case string(domain.DestinationSortDistanceAsc), "nearby":
 			filter.Sort = domain.DestinationSortDistanceAsc
 		default:
 			return domain.DestinationListFilter{}, fmt.Errorf("invalid sort value %q", raw)

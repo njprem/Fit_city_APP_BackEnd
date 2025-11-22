@@ -800,6 +800,40 @@ func (m *memoryDestinationRepo) ListPublished(ctx context.Context, limit, offset
 	return published[offset:end], nil
 }
 
+func (m *memoryDestinationRepo) Autocomplete(ctx context.Context, query string, limit int) ([]string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	needle := strings.ToLower(strings.TrimSpace(query))
+	seen := make(map[string]struct{})
+	names := make([]string, 0)
+
+	for _, dest := range m.store {
+		if dest.Status != domain.DestinationStatusPublished || dest.DeletedAt != nil {
+			continue
+		}
+		name := strings.TrimSpace(dest.Name)
+		if name == "" {
+			continue
+		}
+		lower := strings.ToLower(name)
+		if needle != "" && !strings.Contains(lower, needle) {
+			continue
+		}
+		if _, ok := seen[lower]; ok {
+			continue
+		}
+		seen[lower] = struct{}{}
+		names = append(names, name)
+	}
+
+	sort.Strings(names)
+	if limit > 0 && len(names) > limit {
+		return names[:limit], nil
+	}
+	return names, nil
+}
+
 func destinationMatchesQuery(dest *domain.Destination, needle string) bool {
 	if dest == nil {
 		return false

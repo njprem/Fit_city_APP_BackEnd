@@ -542,6 +542,10 @@ func (m *reviewDestinationRepo) ListPublished(context.Context, int, int, domain.
 	return nil, errors.New("not implemented")
 }
 
+func (m *reviewDestinationRepo) Autocomplete(context.Context, string, int) ([]string, error) {
+	return nil, errors.New("not implemented")
+}
+
 var _ ports.ReviewRepository = (*memoryReviewRepository)(nil)
 var _ ports.ReviewMediaRepository = (*memoryMediaRepository)(nil)
 var _ ports.DestinationRepository = (*reviewDestinationRepo)(nil)

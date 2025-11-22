@@ -420,7 +420,7 @@ func (r *DestinationRepository) Autocomplete(ctx context.Context, query string, 
 	args := []any{q, limit}
 
 	sql := `
-		SELECT DISTINCT suggestion
+		SELECT suggestion
 		FROM (
 			SELECT
 				name AS suggestion,
@@ -442,7 +442,7 @@ func (r *DestinationRepository) Autocomplete(ctx context.Context, query string, 
 			FROM travel_destination
 			WHERE status = 'published' AND country IS NOT NULL
 		) AS s
-		WHERE suggestionn ILIKE '%' || $1 || '%'
+		WHERE suggestion ILIKE '%' || $1 || '%'
 		ORDER BY score DESC
 		LIMIT $2;
 	`
