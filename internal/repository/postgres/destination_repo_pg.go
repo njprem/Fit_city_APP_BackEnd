@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/google/uuid"
@@ -15,11 +16,14 @@ import (
 )
 
 type DestinationRepository struct {
-	db *sqlx.DB
+	db               *sqlx.DB
+	trigramAvailable bool
 }
 
 func NewDestinationRepo(db *sqlx.DB) *DestinationRepository {
-	return &DestinationRepository{db: db}
+	repo := &DestinationRepository{db: db}
+	repo.trigramAvailable = repo.checkTrigramSupport(context.Background())
+	return repo
 }
 
 func (r *DestinationRepository) Create(ctx context.Context, fields domain.DestinationChangeFields, createdBy uuid.UUID, status domain.DestinationStatus, heroImageURL *string) (*domain.Destination, error) {
@@ -285,16 +289,20 @@ func (r *DestinationRepository) ListPublished(ctx context.Context, limit, offset
 	if trimmed := strings.TrimSpace(filter.Search); trimmed != "" {
 		placeholder := fmt.Sprintf("$%d", len(params)+1)
 		builder.WriteString(`
-		AND to_tsvector(
-			'simple',
-			COALESCE(d.name, '') || ' ' ||
-			COALESCE(d.city, '') || ' ' ||
-			COALESCE(d.country, '') || ' ' ||
-			COALESCE(d.category, '') || ' ' ||
-			COALESCE(d.description, '')
-		) @@ plainto_tsquery('simple', ` + placeholder + `)
-		 OR similarity(d.name, ` + placeholder + `) > 0.2
-		`)
+		AND (
+			to_tsvector(
+				'simple',
+				COALESCE(d.name, '') || ' ' ||
+				COALESCE(d.city, '') || ' ' ||
+				COALESCE(d.country, '') || ' ' ||
+				COALESCE(d.category, '') || ' ' ||
+				COALESCE(d.description, '')
+			) @@ plainto_tsquery('simple', ` + placeholder + `)`)
+		if r.trigramAvailable {
+			builder.WriteString(`
+			OR similarity(d.name, ` + placeholder + `) > 0.2`)
+		}
+		builder.WriteString("\n\t)")
 		params = append(params, trimmed)
 	}
 
@@ -379,10 +387,12 @@ func (r *DestinationRepository) ListPublished(ctx context.Context, limit, offset
 		builder.WriteString("d.name DESC")
 	case domain.DestinationSortSimilarity:
 		trimmed := strings.TrimSpace(filter.Search)
-		if trimmed != "" {
+		if trimmed != "" && r.trigramAvailable {
 			placeholder := fmt.Sprintf("$%d", len(params)+1)
 			builder.WriteString("similarity(d.name, " + placeholder + ") DESC, d.name ASC")
 			params = append(params, trimmed)
+		} else {
+			builder.WriteString("d.updated_at DESC")
 		}
 	case domain.DestinationSortDistanceAsc:
 		if filter.Latitude != nil && filter.Longitude != nil {
@@ -448,8 +458,10 @@ func (r *DestinationRepository) Autocomplete(ctx context.Context, query string, 
 	`
 
 	var results []string
-	if err := r.db.SelectContext(ctx, &results, sql, args...); err != nil {
-		return nil, err
+	if r.trigramAvailable {
+		if err := r.db.SelectContext(ctx, &results, sql, args...); err != nil {
+			return nil, err
+		}
 	}
 
 	if len(results) == 0 {
@@ -457,7 +469,7 @@ func (r *DestinationRepository) Autocomplete(ctx context.Context, query string, 
 			SELECT name
 			FROM travel_destination
 			WHERE status = 'published'
-				AND name ILIKE '%' || $1 || '$'
+				AND name ILIKE '%' || $1 || '%'
 			ORDER BY name ASC
 			LIMIT $2
 		`
@@ -511,6 +523,18 @@ func galleryValue(ptr *domain.DestinationGallery) domain.DestinationGallery {
 		return nil
 	}
 	return append(domain.DestinationGallery(nil), (*ptr)...)
+}
+
+func (r *DestinationRepository) checkTrigramSupport(ctx context.Context) bool {
+	var available bool
+	if err := r.db.GetContext(ctx, &available, `SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm')`); err != nil {
+		log.Printf("destination repository: check pg_trgm support: %v", err)
+		return false
+	}
+	if !available {
+		log.Printf("destination repository: pg_trgm extension not found; similarity search disabled")
+	}
+	return available
 }
 
 var _ ports.DestinationRepository = (*DestinationRepository)(nil)
