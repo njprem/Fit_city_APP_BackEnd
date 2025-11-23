@@ -42,6 +42,7 @@ func RegisterDestinations(e *echo.Echo, auth *service.AuthService, destService *
 
 	if features.View {
 		public := e.Group("/api/v1/destinations")
+		public.GET("/autocomplete", handler.Autocomplete)
 		public.GET("", handler.listPublished)
 		public.GET("/:id", handler.getDestination)
 	}
@@ -542,6 +543,29 @@ func (h *DestinationHandler) isActionEnabled(action domain.DestinationChangeActi
 	}
 }
 
+func (h *DestinationHandler) Autocomplete(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	query := strings.TrimSpace(c.QueryParam("query"))
+	if query == "" {
+		return c.JSON(http.StatusOK, []string{})
+	}
+
+	limit := 5
+	if v := c.QueryParam("limit"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+
+	suggestions, err := h.destinations.Autocomplete(ctx, query, limit)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, suggestions)
+}
+
 func parsePagination(c echo.Context, defaultLimit, defaultOffset int) (int, int) {
 	limit := defaultLimit
 	offset := defaultOffset
@@ -707,9 +731,61 @@ func parseDestinationListFilter(c echo.Context) (domain.DestinationListFilter, e
 			filter.Sort = domain.DestinationSortNameDesc
 		case string(domain.DestinationSortUpdatedAtDesc), "updated", "recent":
 			filter.Sort = domain.DestinationSortUpdatedAtDesc
+		case string(domain.DestinationSortSimilarity), "relevance", "relevant":
+			filter.Sort = domain.DestinationSortSimilarity
+		case string(domain.DestinationSortDistanceAsc), "nearby":
+			filter.Sort = domain.DestinationSortDistanceAsc
 		default:
 			return domain.DestinationListFilter{}, fmt.Errorf("invalid sort value %q", raw)
 		}
+	}
+
+	if v := strings.TrimSpace(c.QueryParam("city")); v != "" {
+		filter.City = &v
+	}
+
+	if v := strings.TrimSpace(c.QueryParam("country")); v != "" {
+		filter.Country = &v
+	}
+
+	if v := strings.TrimSpace(c.QueryParam("lat")); v != "" {
+		parsed, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return domain.DestinationListFilter{}, errors.New("lat must be a number")
+		}
+		if parsed < -90 || parsed > 90 {
+			return domain.DestinationListFilter{}, errors.New("lat must be between -90 and 90")
+		}
+		filter.Latitude = &parsed
+	}
+
+	if v := strings.TrimSpace(c.QueryParam("lng")); v != "" {
+		parsed, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return domain.DestinationListFilter{}, errors.New("lng must be a number")
+		}
+		if parsed < -180 || parsed > 180 {
+			return domain.DestinationListFilter{}, errors.New("lng must be between -180 and 180")
+		}
+		filter.Longitude = &parsed
+	}
+
+	if v := strings.TrimSpace(c.QueryParam("max_distance_km")); v != "" {
+		parsed, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return domain.DestinationListFilter{}, errors.New("max_distance_km must be a number")
+		}
+		if parsed <= 0 {
+			return domain.DestinationListFilter{}, errors.New("max_distance_km must be greater than 0")
+		}
+		filter.MaxDistanceKM = &parsed
+	}
+
+	if (filter.Latitude == nil) != (filter.Longitude == nil) {
+		return domain.DestinationListFilter{}, errors.New("both lat and lng must be provided for geo search")
+	}
+	if filter.MaxDistanceKM != nil && filter.Latitude == nil {
+		return domain.DestinationListFilter{}, errors.New("lat and lng are required when max_distance_km is set")
 	}
 
 	return filter, nil

@@ -1291,6 +1291,37 @@ paths:
         in: query
         name: max_rating
         type: number
+      - description: Country filter
+        in: query
+        name: country
+        type: string
+      - description: City filter
+        in: query
+        name: city
+        type: string
+      - description: Latitude for nearby search
+        in: query
+        name: lat
+        type: number
+        format: double
+      - description: Longitude for nearby search
+        in: query
+        name: lng
+        type: number
+        format: double
+      - description: Max distance in kilometers for nearby search
+        in: query
+        name: max_distance_km
+        type: number
+        format: double
+      - description: Additional Sort (similarity, distance)
+        in: query
+        name: sort
+        type: string
+      - description: Sort order (rating_desc, rating_asc, alpha_asc, alpha_desc, updated_at_desc)
+        in: query
+        name: sort
+        type: strings
       - description: Sort order (rating_desc, rating_asc, alpha_asc, alpha_desc, updated_at_desc)
         in: query
         name: sort
@@ -1303,6 +1334,30 @@ paths:
           schema:
             $ref: '#/definitions/http.DestinationListResponse'
       summary: List published destinations
+      tags:
+      - Destinations
+  /destinations/autocomplete:
+    get:
+      description: Return autocomplete suggestions for destination name, city, or country.
+      parameters:
+      - description: Partial text search
+        in: query
+        name: query
+        required: true
+        type: string
+      - description: Maximum number of suggestions to return (def = 5)
+        in: query
+        name: limit
+        type: integer
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: array
+            items:
+              type: string
+      summary: Autocomplete destination suggestions
       tags:
       - Destinations
   /destinations/{id}:

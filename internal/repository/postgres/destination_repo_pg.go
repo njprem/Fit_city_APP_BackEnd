@@ -293,6 +293,7 @@ func (r *DestinationRepository) ListPublished(ctx context.Context, limit, offset
 			COALESCE(d.category, '') || ' ' ||
 			COALESCE(d.description, '')
 		) @@ plainto_tsquery('simple', ` + placeholder + `)
+		 OR similarity(d.name, ` + placeholder + `) > 0.2
 		`)
 		params = append(params, trimmed)
 	}
@@ -311,6 +312,40 @@ func (r *DestinationRepository) ListPublished(ctx context.Context, limit, offset
 			`)
 			params = append(params, pq.StringArray(categories))
 		}
+	}
+
+	if filter.City != nil {
+		city := strings.TrimSpace(*filter.City)
+		if city != "" {
+			placeholder := fmt.Sprintf("$%d", len(params)+1)
+			builder.WriteString("\n\tAND d.city ILIKE " + placeholder)
+			params = append(params, "%"+city+"%")
+		}
+	}
+
+	if filter.Country != nil {
+		country := strings.TrimSpace(*filter.Country)
+		if country != "" {
+			placeholder := fmt.Sprintf("$%d", len(params)+1)
+			builder.WriteString("\n\tAND d.country ILIKE " + placeholder)
+			params = append(params, "%"+country+"%")
+		}
+	}
+
+	if filter.MaxDistanceKM != nil && filter.Latitude != nil && filter.Longitude != nil {
+		latPlaceholder := fmt.Sprintf("$%d", len(params)+1)
+		lngPlaceholder := fmt.Sprintf("$%d", len(params)+2)
+		distPlaceholder := fmt.Sprintf("$%d", len(params)+3)
+
+		builder.WriteString(`
+			AND d.latitude IS NOT NULL AND d.longitude IS NOT NULL
+			AND (6371 * acos(
+				cos(radians(` + latPlaceholder + `)) * cos(radians(d.latitude)) *
+				cos(radians(d.longitude) - radians(` + lngPlaceholder + `)) +
+				sin(radians(` + latPlaceholder + `)) * sin(radians(d.latitude)) 
+			)) <= ` + distPlaceholder + `
+		`)
+		params = append(params, *filter.Latitude, *filter.Longitude, *filter.MaxDistanceKM)
 	}
 
 	builder.WriteString(`
@@ -342,6 +377,26 @@ func (r *DestinationRepository) ListPublished(ctx context.Context, limit, offset
 		builder.WriteString("d.name ASC")
 	case domain.DestinationSortNameDesc:
 		builder.WriteString("d.name DESC")
+	case domain.DestinationSortSimilarity:
+		trimmed := strings.TrimSpace(filter.Search)
+		if trimmed != "" {
+			placeholder := fmt.Sprintf("$%d", len(params)+1)
+			builder.WriteString("similarity(d.name, " + placeholder + ") DESC, d.name ASC")
+			params = append(params, trimmed)
+		}
+	case domain.DestinationSortDistanceAsc:
+		if filter.Latitude != nil && filter.Longitude != nil {
+			latPlaceholder := fmt.Sprintf("$%d", len(params)+1)
+			lngPlaceholder := fmt.Sprintf("$%d", len(params)+2)
+
+			builder.WriteString(`
+				(6371 * acos(
+					cos(radians(` + latPlaceholder + `)) * cos(radians(d.latitude)) *
+					cos(radians(d.longitude) - radians(` + lngPlaceholder + `)) + 
+					sin(radians(` + latPlaceholder + `)) * sin(radians(d.latitude))
+				)) ASc, d.name ASC
+			`)
+		}
 	default:
 		builder.WriteString("d.updated_at DESC")
 	}
@@ -358,6 +413,61 @@ func (r *DestinationRepository) ListPublished(ctx context.Context, limit, offset
 		return nil, err
 	}
 	return destinations, nil
+}
+
+func (r *DestinationRepository) Autocomplete(ctx context.Context, query string, limit int) ([]string, error) {
+	q := strings.TrimSpace(query)
+	args := []any{q, limit}
+
+	sql := `
+		SELECT suggestion
+		FROM (
+			SELECT
+				name AS suggestion,
+				similarity(name, $1) AS score
+			FROM travel_destination
+			WHERE status = 'published' AND name IS NOT NULL
+
+			UNION
+			SELECT
+				city AS suggestion,
+				similarity(city, $1) AS score
+			FROM travel_destination
+			WHERE status = 'published' AND city IS NOT NULL
+
+			UNION
+			SELECT
+				country AS suggestion,
+				similarity(country, $1) AS score
+			FROM travel_destination
+			WHERE status = 'published' AND country IS NOT NULL
+		) AS s
+		WHERE suggestion ILIKE '%' || $1 || '%'
+		ORDER BY score DESC
+		LIMIT $2;
+	`
+
+	var results []string
+	if err := r.db.SelectContext(ctx, &results, sql, args...); err != nil {
+		return nil, err
+	}
+
+	if len(results) == 0 {
+		sql = `
+			SELECT name
+			FROM travel_destination
+			WHERE status = 'published'
+				AND name ILIKE '%' || $1 || '$'
+			ORDER BY name ASC
+			LIMIT $2
+		`
+
+		if err := r.db.SelectContext(ctx, &results, sql, args...); err != nil {
+			return nil, err
+		}
+	}
+
+	return results, nil
 }
 
 func valueOrDefault(ptr *string, fallback string) string {

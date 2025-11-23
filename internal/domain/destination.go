@@ -98,6 +98,8 @@ const (
 	DestinationSortRatingAsc     DestinationListSort = "rating_asc"
 	DestinationSortNameAsc       DestinationListSort = "name_asc"
 	DestinationSortNameDesc      DestinationListSort = "name_desc"
+	DestinationSortSimilarity    DestinationListSort = "similarity"
+	DestinationSortDistanceAsc   DestinationListSort = "distance"
 )
 
 func (s DestinationListSort) IsValid() bool {
@@ -106,7 +108,9 @@ func (s DestinationListSort) IsValid() bool {
 		DestinationSortRatingDesc,
 		DestinationSortRatingAsc,
 		DestinationSortNameAsc,
-		DestinationSortNameDesc:
+		DestinationSortNameDesc,
+		DestinationSortSimilarity,
+		DestinationSortDistanceAsc:
 		return true
 	default:
 		return false
@@ -114,9 +118,14 @@ func (s DestinationListSort) IsValid() bool {
 }
 
 type DestinationListFilter struct {
-	Search     string
-	Categories []string
-	MinRating  *float64
-	MaxRating  *float64
-	Sort       DestinationListSort
+	Search        string
+	Categories    []string
+	MinRating     *float64
+	MaxRating     *float64
+	City          *string
+	Country       *string
+	Latitude      *float64
+	Longitude     *float64
+	MaxDistanceKM *float64
+	Sort          DestinationListSort
 }
