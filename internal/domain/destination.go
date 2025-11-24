@@ -80,6 +80,7 @@ type Destination struct {
 	DeletedAt     *time.Time         `db:"deleted_at" json:"deleted_at,omitempty"`
 	AverageRating float64            `db:"average_rating" json:"-"`
 	ReviewCount   int                `db:"review_count" json:"-"`
+	TotalCount    int                `db:"total_count" json:"-"`
 }
 
 func (d Destination) IsPublished() bool {

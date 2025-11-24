@@ -276,7 +276,8 @@ func (r *DestinationRepository) ListPublished(ctx context.Context, limit, offset
 			d.updated_by,
 			d.deleted_at,
 			COALESCE(AVG(r.rating)::float8, 0) AS average_rating,
-			COUNT(r.id)::int AS review_count
+			COUNT(r.id)::int AS review_count,
+			COUNT(*) OVER() AS total_count
 		FROM travel_destination d
 		LEFT JOIN review r ON r.destination_id = d.id AND r.deleted_at IS NULL
 		WHERE d.status = 'published' AND d.deleted_at IS NULL

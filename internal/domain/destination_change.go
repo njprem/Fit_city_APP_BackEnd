@@ -83,6 +83,7 @@ type DestinationChangeRequest struct {
 	PublishedVersion *int64                  `db:"published_version" json:"published_version,omitempty"`
 	CreatedAt        time.Time               `db:"created_at" json:"created_at"`
 	UpdatedAt        time.Time               `db:"updated_at" json:"updated_at"`
+	TotalCount       int                     `db:"total_count" json:"-"`
 }
 
 func (c DestinationChangeRequest) IsDraft() bool {

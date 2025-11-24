@@ -307,12 +307,17 @@ func (h *DestinationHandler) listChanges(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, util.Error("unable to load change metadata"))
 	}
 
+	total := 0
+	if len(changes) > 0 {
+		total = changes[0].TotalCount
+	}
 	return c.JSON(http.StatusOK, util.Envelope{
 		"changes": payload,
 		"meta": util.Envelope{
 			"limit":  limit,
 			"offset": offset,
 			"count":  len(payload),
+			"total":  total,
 		},
 	})
 }
@@ -466,12 +471,17 @@ func (h *DestinationHandler) listPublished(c echo.Context) error {
 	for i := range destinations {
 		payload = append(payload, buildDestinationResponse(&destinations[i]))
 	}
+	total := 0
+	if len(destinations) > 0 {
+		total = destinations[0].TotalCount
+	}
 	return c.JSON(http.StatusOK, util.Envelope{
 		"destinations": payload,
 		"meta": util.Envelope{
 			"limit":  limit,
 			"offset": offset,
 			"count":  len(payload),
+			"total":  total,
 		},
 	})
 }
