@@ -571,6 +571,9 @@ definitions:
       count:
         example: 1
         type: integer
+      total:
+        example: 57
+        type: integer
       limit:
         example: 20
         type: integer
