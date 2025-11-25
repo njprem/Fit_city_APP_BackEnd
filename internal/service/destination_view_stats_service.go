@@ -107,7 +107,9 @@ func (s *DestinationViewStatsService) ExportPopularity(ctx context.Context, dest
 
 	if forceRefresh && len(ids) > 0 && s.es != nil {
 		if err := s.refreshDestinations(ctx, ids); err != nil {
-			return nil, err
+			// Log and continue with existing data to avoid blocking exports when ES is unavailable.
+			// The view stats endpoints already fallback when refresh fails.
+			log.Printf("refresh destinations for export failed: %v", err)
 		}
 	}
 
