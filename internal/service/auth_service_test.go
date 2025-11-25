@@ -40,6 +40,10 @@ type fakeUserRepo struct {
 	findByIDResult *domain.User
 	findByIDErr    error
 
+	listByIDsInput  []uuid.UUID
+	listByIDsResult []domain.User
+	listByIDsErr    error
+
 	updateProfileInput struct {
 		id               uuid.UUID
 		fullName         *string
@@ -90,6 +94,14 @@ func (f *fakeUserRepo) FindByEmail(ctx context.Context, email string) (*domain.U
 func (f *fakeUserRepo) FindByID(ctx context.Context, id uuid.UUID) (*domain.User, error) {
 	f.findByIDInput = id
 	return f.findByIDResult, f.findByIDErr
+}
+
+func (f *fakeUserRepo) ListByIDs(ctx context.Context, ids []uuid.UUID) ([]domain.User, error) {
+	f.listByIDsInput = append([]uuid.UUID(nil), ids...)
+	if f.listByIDsResult != nil {
+		return f.listByIDsResult, f.listByIDsErr
+	}
+	return nil, f.listByIDsErr
 }
 
 func (f *fakeUserRepo) UpdateProfile(ctx context.Context, id uuid.UUID, fullName *string, username *string, imageURL *string, profileCompleted bool) (*domain.User, error) {

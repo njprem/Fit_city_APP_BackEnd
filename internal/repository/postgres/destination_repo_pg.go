@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/google/uuid"
@@ -15,11 +16,14 @@ import (
 )
 
 type DestinationRepository struct {
-	db *sqlx.DB
+	db               *sqlx.DB
+	trigramAvailable bool
 }
 
 func NewDestinationRepo(db *sqlx.DB) *DestinationRepository {
-	return &DestinationRepository{db: db}
+	repo := &DestinationRepository{db: db}
+	repo.trigramAvailable = repo.checkTrigramSupport(context.Background())
+	return repo
 }
 
 func (r *DestinationRepository) Create(ctx context.Context, fields domain.DestinationChangeFields, createdBy uuid.UUID, status domain.DestinationStatus, heroImageURL *string) (*domain.Destination, error) {
@@ -272,7 +276,8 @@ func (r *DestinationRepository) ListPublished(ctx context.Context, limit, offset
 			d.updated_by,
 			d.deleted_at,
 			COALESCE(AVG(r.rating)::float8, 0) AS average_rating,
-			COUNT(r.id)::int AS review_count
+			COUNT(r.id)::int AS review_count,
+			COUNT(*) OVER() AS total_count
 		FROM travel_destination d
 		LEFT JOIN review r ON r.destination_id = d.id AND r.deleted_at IS NULL
 		WHERE d.status = 'published' AND d.deleted_at IS NULL
@@ -285,15 +290,20 @@ func (r *DestinationRepository) ListPublished(ctx context.Context, limit, offset
 	if trimmed := strings.TrimSpace(filter.Search); trimmed != "" {
 		placeholder := fmt.Sprintf("$%d", len(params)+1)
 		builder.WriteString(`
-		AND to_tsvector(
-			'simple',
-			COALESCE(d.name, '') || ' ' ||
-			COALESCE(d.city, '') || ' ' ||
-			COALESCE(d.country, '') || ' ' ||
-			COALESCE(d.category, '') || ' ' ||
-			COALESCE(d.description, '')
-		) @@ plainto_tsquery('simple', ` + placeholder + `)
-		`)
+		AND (
+			to_tsvector(
+				'simple',
+				COALESCE(d.name, '') || ' ' ||
+				COALESCE(d.city, '') || ' ' ||
+				COALESCE(d.country, '') || ' ' ||
+				COALESCE(d.category, '') || ' ' ||
+				COALESCE(d.description, '')
+			) @@ plainto_tsquery('simple', ` + placeholder + `)`)
+		if r.trigramAvailable {
+			builder.WriteString(`
+			OR similarity(d.name, ` + placeholder + `) > 0.2`)
+		}
+		builder.WriteString("\n\t)")
 		params = append(params, trimmed)
 	}
 
@@ -311,6 +321,40 @@ func (r *DestinationRepository) ListPublished(ctx context.Context, limit, offset
 			`)
 			params = append(params, pq.StringArray(categories))
 		}
+	}
+
+	if filter.City != nil {
+		city := strings.TrimSpace(*filter.City)
+		if city != "" {
+			placeholder := fmt.Sprintf("$%d", len(params)+1)
+			builder.WriteString("\n\tAND d.city ILIKE " + placeholder)
+			params = append(params, "%"+city+"%")
+		}
+	}
+
+	if filter.Country != nil {
+		country := strings.TrimSpace(*filter.Country)
+		if country != "" {
+			placeholder := fmt.Sprintf("$%d", len(params)+1)
+			builder.WriteString("\n\tAND d.country ILIKE " + placeholder)
+			params = append(params, "%"+country+"%")
+		}
+	}
+
+	if filter.MaxDistanceKM != nil && filter.Latitude != nil && filter.Longitude != nil {
+		latPlaceholder := fmt.Sprintf("$%d", len(params)+1)
+		lngPlaceholder := fmt.Sprintf("$%d", len(params)+2)
+		distPlaceholder := fmt.Sprintf("$%d", len(params)+3)
+
+		builder.WriteString(`
+			AND d.latitude IS NOT NULL AND d.longitude IS NOT NULL
+			AND (6371 * acos(
+				cos(radians(` + latPlaceholder + `)) * cos(radians(d.latitude)) *
+				cos(radians(d.longitude) - radians(` + lngPlaceholder + `)) +
+				sin(radians(` + latPlaceholder + `)) * sin(radians(d.latitude)) 
+			)) <= ` + distPlaceholder + `
+		`)
+		params = append(params, *filter.Latitude, *filter.Longitude, *filter.MaxDistanceKM)
 	}
 
 	builder.WriteString(`
@@ -342,6 +386,28 @@ func (r *DestinationRepository) ListPublished(ctx context.Context, limit, offset
 		builder.WriteString("d.name ASC")
 	case domain.DestinationSortNameDesc:
 		builder.WriteString("d.name DESC")
+	case domain.DestinationSortSimilarity:
+		trimmed := strings.TrimSpace(filter.Search)
+		if trimmed != "" && r.trigramAvailable {
+			placeholder := fmt.Sprintf("$%d", len(params)+1)
+			builder.WriteString("similarity(d.name, " + placeholder + ") DESC, d.name ASC")
+			params = append(params, trimmed)
+		} else {
+			builder.WriteString("d.updated_at DESC")
+		}
+	case domain.DestinationSortDistanceAsc:
+		if filter.Latitude != nil && filter.Longitude != nil {
+			latPlaceholder := fmt.Sprintf("$%d", len(params)+1)
+			lngPlaceholder := fmt.Sprintf("$%d", len(params)+2)
+
+			builder.WriteString(`
+				(6371 * acos(
+					cos(radians(` + latPlaceholder + `)) * cos(radians(d.latitude)) *
+					cos(radians(d.longitude) - radians(` + lngPlaceholder + `)) + 
+					sin(radians(` + latPlaceholder + `)) * sin(radians(d.latitude))
+				)) ASc, d.name ASC
+			`)
+		}
 	default:
 		builder.WriteString("d.updated_at DESC")
 	}
@@ -358,6 +424,63 @@ func (r *DestinationRepository) ListPublished(ctx context.Context, limit, offset
 		return nil, err
 	}
 	return destinations, nil
+}
+
+func (r *DestinationRepository) Autocomplete(ctx context.Context, query string, limit int) ([]string, error) {
+	q := strings.TrimSpace(query)
+	args := []any{q, limit}
+
+	sql := `
+		SELECT suggestion
+		FROM (
+			SELECT
+				name AS suggestion,
+				similarity(name, $1) AS score
+			FROM travel_destination
+			WHERE status = 'published' AND name IS NOT NULL
+
+			UNION
+			SELECT
+				city AS suggestion,
+				similarity(city, $1) AS score
+			FROM travel_destination
+			WHERE status = 'published' AND city IS NOT NULL
+
+			UNION
+			SELECT
+				country AS suggestion,
+				similarity(country, $1) AS score
+			FROM travel_destination
+			WHERE status = 'published' AND country IS NOT NULL
+		) AS s
+		WHERE suggestion ILIKE '%' || $1 || '%'
+		ORDER BY score DESC
+		LIMIT $2;
+	`
+
+	var results []string
+	if r.trigramAvailable {
+		if err := r.db.SelectContext(ctx, &results, sql, args...); err != nil {
+			return nil, err
+		}
+	}
+
+	if len(results) == 0 {
+		sql = `
+			SELECT name
+			FROM travel_destination
+			WHERE status = 'published'
+				AND name ILIKE '%' || $1 || '%'
+			ORDER BY name ASC
+			LIMIT $2
+		`
+
+		if err := r.db.SelectContext(ctx, &results, sql, args...); err != nil {
+			return nil, err
+		}
+	}
+
+	return results, nil
 }
 
 func valueOrDefault(ptr *string, fallback string) string {
@@ -401,6 +524,18 @@ func galleryValue(ptr *domain.DestinationGallery) domain.DestinationGallery {
 		return nil
 	}
 	return append(domain.DestinationGallery(nil), (*ptr)...)
+}
+
+func (r *DestinationRepository) checkTrigramSupport(ctx context.Context) bool {
+	var available bool
+	if err := r.db.GetContext(ctx, &available, `SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm')`); err != nil {
+		log.Printf("destination repository: check pg_trgm support: %v", err)
+		return false
+	}
+	if !available {
+		log.Printf("destination repository: pg_trgm extension not found; similarity search disabled")
+	}
+	return available
 }
 
 var _ ports.DestinationRepository = (*DestinationRepository)(nil)

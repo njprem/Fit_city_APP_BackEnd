@@ -136,7 +136,8 @@ func (r *DestinationChangeRepository) FindByID(ctx context.Context, id uuid.UUID
 	const query = `
 		SELECT id, destination_id, action, payload, hero_image_temp_key, status,
 		       draft_version, submitted_by, reviewed_by, submitted_at, reviewed_at,
-		       review_message, published_version, created_at, updated_at
+		       review_message, published_version, created_at, updated_at,
+		       COUNT(*) OVER() AS total_count
 		FROM destination_change_request
 		WHERE id = $1
 	`

@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -41,6 +42,7 @@ func RegisterDestinations(e *echo.Echo, auth *service.AuthService, destService *
 
 	if features.View {
 		public := e.Group("/api/v1/destinations")
+		public.GET("/autocomplete", handler.Autocomplete)
 		public.GET("", handler.listPublished)
 		public.GET("/:id", handler.getDestination)
 	}
@@ -248,8 +250,13 @@ func (h *DestinationHandler) getChange(c echo.Context) error {
 	if err != nil {
 		return h.writeChangeError(c, err)
 	}
+
+	resp := buildChangeResponse(change)
+	if err := h.addChangeUserDetails(c.Request().Context(), []util.Envelope{resp}, []*domain.DestinationChangeRequest{change}); err != nil {
+		return c.JSON(http.StatusInternalServerError, util.Error("unable to load change metadata"))
+	}
 	return c.JSON(http.StatusOK, util.Envelope{
-		"change_request": buildChangeResponse(change),
+		"change_request": resp,
 	})
 }
 
@@ -290,16 +297,27 @@ func (h *DestinationHandler) listChanges(c echo.Context) error {
 	}
 
 	payload := make([]util.Envelope, 0, len(changes))
+	changePtrs := make([]*domain.DestinationChangeRequest, 0, len(changes))
 	for i := range changes {
 		payload = append(payload, buildChangeResponse(&changes[i]))
+		changePtrs = append(changePtrs, &changes[i])
 	}
 
+	if err := h.addChangeUserDetails(c.Request().Context(), payload, changePtrs); err != nil {
+		return c.JSON(http.StatusInternalServerError, util.Error("unable to load change metadata"))
+	}
+
+	total := 0
+	if len(changes) > 0 {
+		total = changes[0].TotalCount
+	}
 	return c.JSON(http.StatusOK, util.Envelope{
 		"changes": payload,
 		"meta": util.Envelope{
 			"limit":  limit,
 			"offset": offset,
 			"count":  len(payload),
+			"total":  total,
 		},
 	})
 }
@@ -453,12 +471,17 @@ func (h *DestinationHandler) listPublished(c echo.Context) error {
 	for i := range destinations {
 		payload = append(payload, buildDestinationResponse(&destinations[i]))
 	}
+	total := 0
+	if len(destinations) > 0 {
+		total = destinations[0].TotalCount
+	}
 	return c.JSON(http.StatusOK, util.Envelope{
 		"destinations": payload,
 		"meta": util.Envelope{
 			"limit":  limit,
 			"offset": offset,
 			"count":  len(payload),
+			"total":  total,
 		},
 	})
 }
@@ -528,6 +551,29 @@ func (h *DestinationHandler) isActionEnabled(action domain.DestinationChangeActi
 	default:
 		return false
 	}
+}
+
+func (h *DestinationHandler) Autocomplete(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	query := strings.TrimSpace(c.QueryParam("query"))
+	if query == "" {
+		return c.JSON(http.StatusOK, []string{})
+	}
+
+	limit := 5
+	if v := c.QueryParam("limit"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+
+	suggestions, err := h.destinations.Autocomplete(ctx, query, limit)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, suggestions)
 }
 
 func parsePagination(c echo.Context, defaultLimit, defaultOffset int) (int, int) {
@@ -695,9 +741,61 @@ func parseDestinationListFilter(c echo.Context) (domain.DestinationListFilter, e
 			filter.Sort = domain.DestinationSortNameDesc
 		case string(domain.DestinationSortUpdatedAtDesc), "updated", "recent":
 			filter.Sort = domain.DestinationSortUpdatedAtDesc
+		case string(domain.DestinationSortSimilarity), "relevance", "relevant":
+			filter.Sort = domain.DestinationSortSimilarity
+		case string(domain.DestinationSortDistanceAsc), "nearby":
+			filter.Sort = domain.DestinationSortDistanceAsc
 		default:
 			return domain.DestinationListFilter{}, fmt.Errorf("invalid sort value %q", raw)
 		}
+	}
+
+	if v := strings.TrimSpace(c.QueryParam("city")); v != "" {
+		filter.City = &v
+	}
+
+	if v := strings.TrimSpace(c.QueryParam("country")); v != "" {
+		filter.Country = &v
+	}
+
+	if v := strings.TrimSpace(c.QueryParam("lat")); v != "" {
+		parsed, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return domain.DestinationListFilter{}, errors.New("lat must be a number")
+		}
+		if parsed < -90 || parsed > 90 {
+			return domain.DestinationListFilter{}, errors.New("lat must be between -90 and 90")
+		}
+		filter.Latitude = &parsed
+	}
+
+	if v := strings.TrimSpace(c.QueryParam("lng")); v != "" {
+		parsed, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return domain.DestinationListFilter{}, errors.New("lng must be a number")
+		}
+		if parsed < -180 || parsed > 180 {
+			return domain.DestinationListFilter{}, errors.New("lng must be between -180 and 180")
+		}
+		filter.Longitude = &parsed
+	}
+
+	if v := strings.TrimSpace(c.QueryParam("max_distance_km")); v != "" {
+		parsed, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return domain.DestinationListFilter{}, errors.New("max_distance_km must be a number")
+		}
+		if parsed <= 0 {
+			return domain.DestinationListFilter{}, errors.New("max_distance_km must be greater than 0")
+		}
+		filter.MaxDistanceKM = &parsed
+	}
+
+	if (filter.Latitude == nil) != (filter.Longitude == nil) {
+		return domain.DestinationListFilter{}, errors.New("both lat and lng must be provided for geo search")
+	}
+	if filter.MaxDistanceKM != nil && filter.Latitude == nil {
+		return domain.DestinationListFilter{}, errors.New("lat and lng are required when max_distance_km is set")
 	}
 
 	return filter, nil
@@ -739,6 +837,70 @@ func buildChangeResponse(change *domain.DestinationChangeRequest) util.Envelope 
 		resp["published_version"] = *change.PublishedVersion
 	}
 	return resp
+}
+
+func (h *DestinationHandler) addChangeUserDetails(ctx context.Context, responses []util.Envelope, changes []*domain.DestinationChangeRequest) error {
+	if len(responses) == 0 || len(changes) == 0 || h.auth == nil {
+		return nil
+	}
+
+	ids := make([]uuid.UUID, 0, len(changes)*2)
+	seen := make(map[uuid.UUID]struct{})
+	for _, change := range changes {
+		if change == nil {
+			continue
+		}
+		if _, ok := seen[change.SubmittedBy]; !ok {
+			seen[change.SubmittedBy] = struct{}{}
+			ids = append(ids, change.SubmittedBy)
+		}
+		if change.ReviewedBy != nil {
+			if _, ok := seen[*change.ReviewedBy]; !ok {
+				seen[*change.ReviewedBy] = struct{}{}
+				ids = append(ids, *change.ReviewedBy)
+			}
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	users, err := h.auth.GetUsersByIDs(ctx, ids)
+	if err != nil {
+		return err
+	}
+	count := len(responses)
+	if len(changes) < count {
+		count = len(changes)
+	}
+	for i := 0; i < count; i++ {
+		applyChangeUserSummary(responses[i], changes[i], users)
+	}
+	return nil
+}
+
+func applyChangeUserSummary(resp util.Envelope, change *domain.DestinationChangeRequest, users map[uuid.UUID]*domain.User) {
+	if resp == nil || change == nil || len(users) == 0 {
+		return
+	}
+	if user, ok := users[change.SubmittedBy]; ok && user != nil {
+		if user.FullName != nil {
+			resp["submitted_by_full_name"] = *user.FullName
+		}
+		if user.Username != nil {
+			resp["submitted_by_username"] = *user.Username
+		}
+	}
+	if change.ReviewedBy != nil {
+		if user, ok := users[*change.ReviewedBy]; ok && user != nil {
+			if user.FullName != nil {
+				resp["reviewed_by_full_name"] = *user.FullName
+			}
+			if user.Username != nil {
+				resp["reviewed_by_username"] = *user.Username
+			}
+		}
+	}
 }
 
 func buildChangeFields(fields domain.DestinationChangeFields) util.Envelope {

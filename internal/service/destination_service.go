@@ -42,3 +42,7 @@ func (s *DestinationService) GetPublishedBySlug(ctx context.Context, slug string
 	}
 	return dest, nil
 }
+
+func (s *DestinationService) Autocomplete(ctx context.Context, query string, limit int) ([]string, error) {
+	return s.destinations.Autocomplete(ctx, query, limit)
+}
