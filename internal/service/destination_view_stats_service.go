@@ -105,7 +105,7 @@ func (s *DestinationViewStatsService) ExportPopularity(ctx context.Context, dest
 		ids = destinationIDs
 	}
 
-	if forceRefresh && len(ids) > 0 {
+	if forceRefresh && len(ids) > 0 && s.es != nil {
 		if err := s.refreshDestinations(ctx, ids); err != nil {
 			return nil, err
 		}
