@@ -47,6 +47,9 @@ func (h *DestinationStatsHandler) getDestinationViews(c echo.Context) error {
 
 	stats, err := h.stats.GetViewStats(c.Request().Context(), dest, false)
 	if err != nil {
+		if errors.Is(err, service.ErrDestinationViewStatsUnavailable) {
+			return c.JSON(http.StatusServiceUnavailable, util.Error("destination stats service unavailable"))
+		}
 		return c.JSON(http.StatusInternalServerError, util.Error("unable to fetch destination stats"))
 	}
 
@@ -103,6 +106,9 @@ func (h *DestinationStatsHandler) adminDestinationStats(c echo.Context) error {
 
 	stats, err := h.stats.GetViewStats(c.Request().Context(), dest, true)
 	if err != nil {
+		if errors.Is(err, service.ErrDestinationViewStatsUnavailable) {
+			return c.JSON(http.StatusServiceUnavailable, util.Error("destination stats service unavailable"))
+		}
 		return c.JSON(http.StatusInternalServerError, util.Error("unable to fetch destination stats"))
 	}
 

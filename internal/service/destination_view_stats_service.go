@@ -22,6 +22,8 @@ type DestinationViewStatsConfig struct {
 	RequestTimeout time.Duration
 }
 
+var ErrDestinationViewStatsUnavailable = errors.New("destination view stats unavailable")
+
 type DestinationViewStatsService struct {
 	repo           ports.DestinationViewStatsRepository
 	es             *elasticsearch.Client
@@ -120,8 +122,11 @@ func (s *DestinationViewStatsService) ExportPopularity(ctx context.Context, dest
 }
 
 func (s *DestinationViewStatsService) refreshDestinations(ctx context.Context, destinationIDs []uuid.UUID) error {
-	if len(destinationIDs) == 0 || s.es == nil {
+	if len(destinationIDs) == 0 {
 		return nil
+	}
+	if s.es == nil {
+		return fmt.Errorf("%w: elasticsearch client not configured", ErrDestinationViewStatsUnavailable)
 	}
 
 	const chunkSize = 200
@@ -177,7 +182,7 @@ func (s *DestinationViewStatsService) fetchRangeStats(ctx context.Context, desti
 		return result, nil
 	}
 	if s.es == nil {
-		return result, errors.New("elasticsearch client not configured")
+		return result, fmt.Errorf("%w: elasticsearch client not configured", ErrDestinationViewStatsUnavailable)
 	}
 
 	ids := make([]string, 0, len(destinationIDs))
@@ -246,17 +251,17 @@ func (s *DestinationViewStatsService) fetchRangeStats(ctx context.Context, desti
 		s.es.Search.WithBody(bytes.NewReader(payload)),
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", ErrDestinationViewStatsUnavailable, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.IsError() {
-		return nil, fmt.Errorf("elasticsearch search error: %s", resp.String())
+		return nil, fmt.Errorf("%w: elasticsearch search error: %s", ErrDestinationViewStatsUnavailable, resp.String())
 	}
 
 	var parsed esSearchResponse
 	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: decode response: %v", ErrDestinationViewStatsUnavailable, err)
 	}
 
 	for _, bucket := range parsed.Aggregations.Destinations.Buckets {
