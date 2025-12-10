@@ -1,0 +1,406 @@
+# Self-Service Password Reset - High-Level Design
+
+## 1. Overview
+The self-service password reset feature allows a user to re-establish access when they forget an account password. After the user requests a reset, the backend generates a time-bound one-time passcode (OTP), persists a hashed version, and delivers the code via email. The user redeems the OTP alongside a new password to finalize the reset. This design leverages existing authentication components in `internal/service/auth_service.go`, the password reset repository in `internal/repository/postgres/password_reset_repo_pg.go`, and the mailer adapter in `internal/transport/mail/password_reset_mailer.go`.
+
+## 2. Goals and Success Criteria
+- Users can request and complete a password reset without staff intervention.
+- OTP codes expire automatically to reduce replay risk.
+- The system invalidates older reset attempts and removes OTPs after successful completion.
+- Reset requests complete end-to-end (user request, mail send) in under a few seconds under nominal load.
+- No plaintext OTP or password material is stored or logged.
+
+## 3. Scope
+- Applies to human users authenticating via email/password.
+- Communicates via email using SMTP credentials configured for the deployment.
+- Does not cover administrators resetting passwords on behalf of users (handled elsewhere).
+- Does not include multi-factor enrollment; OTP is single channel email.
+
+## 4. Actors, Preconditions, Triggers
+- **Actors**: End user, Auth API (`internal/transport/http/auth_handler.go`), AuthService, PasswordResetRepository, PasswordResetMailer.
+- **Preconditions**: User has a verified email on file; SMTP configuration (`SMTP_*`) present; reset TTL (`PASSWORD_RESET_TTL`) and OTP length configured.
+- **Trigger**: User submits a reset request with an email address to `/api/v1/auth/password/reset-request`.
+
+## 5. Use Case Diagram
+```mermaid
+flowchart LR
+    U([User])
+    P([Email Provider])
+    subgraph S["Auth Service"]
+        RQ[Receive reset request]
+        V1{Email valid?}
+        V2{User exists?}
+        C1[Consume existing reset entries]
+        G1[Generate numeric OTP]
+        H1[Hash OTP with salt]
+        ST[Store hashed OTP + expiry]
+        SM[Send OTP email]
+        RC[Receive confirm request]
+        V3{Inputs complete?}
+        V4{User exists?}
+        F1[Find active reset entry]
+        V5{Entry found?}
+        V6{Expired?}
+        V7{OTP matches?}
+        HP[Hash new password]
+        UP[Update password]
+        MC[Mark reset consumed]
+        CL[Clear remaining tokens]
+        SU[[Return success]]
+        ER[[Return error]]
+    end
+
+    U -->|POST /password/reset-request| RQ
+    RQ --> V1
+    V1 -- no --> ER
+    V1 -- yes --> V2
+    V2 -- no --> SU
+    V2 -- yes --> C1 --> G1 --> H1 --> ST --> SM --> P
+    P -->|OTP delivered| U
+    SM --> SU
+
+    U -->|POST /password/reset-confirm| RC
+    RC --> V3
+    V3 -- no --> ER
+    V3 -- yes --> V4
+    V4 -- no --> ER
+    V4 -- yes --> F1 --> V5
+    V5 -- no --> ER
+    V5 -- yes --> V6
+    V6 -- yes --> MC --> ER
+    V6 -- no --> V7
+    V7 -- no --> ER
+    V7 -- yes --> HP --> UP --> MC --> CL --> SU
+```
+
+## 6. Flows
+### 6.1 Reset Request Path
+1. User calls `POST /api/v1/auth/password/reset-request` with email.
+2. `AuthHandler.resetPasswordRequest` validates payload and delegates to `AuthService.RequestPasswordReset`.
+3. AuthService normalizes email, ensures password reset repository exists.
+4. `UserRepository.FindByEmail` retrieves account; missing accounts short-circuit silently to avoid disclosure.
+5. `PasswordResetRepository.ConsumeByUser` invalidates existing pending tokens for the user.
+6. `util.GenerateNumericOTP` creates a numeric code of length `PASSWORD_RESET_OTP_LENGTH`.
+7. `util.DerivePassword` hashes OTP with a random salt.
+8. `PasswordResetRepository.Create` persists hashed OTP, salt, and `expires_at = now + PASSWORD_RESET_TTL`.
+9. The mailer sends the OTP email. If sending fails, the new reset entry is marked consumed to prevent orphaned tokens.
+10. Handler returns HTTP 200 with `{ "success": true }` regardless of user existence.
+
+### 6.2 Reset Confirmation Path
+1. User calls `POST /api/v1/auth/password/reset-confirm` with email, OTP, new password.
+2. Handler validates all fields and calls `AuthService.ConfirmPasswordReset`.
+3. Service verifies password complexity via `util.ValidatePassword`.
+4. Fetches user via `FindByEmail`; missing user returns `ErrResetOTPInvalid`.
+5. `PasswordResetRepository.FindActiveByUser` loads most recent, unconsumed reset whose `expires_at` >= now.
+6. Expired entries are marked consumed and return `ErrResetOTPExpired`.
+7. `util.VerifyPassword` compares provided OTP with stored hash/salt.
+8. On match, new password hash/salt derived with `util.DerivePassword`.
+9. `UserRepository.UpdatePassword` persists the new password.
+10. Reset record is marked consumed and `ConsumeByUser` is called again to guarantee no leftover active tokens.
+11. Handler returns HTTP 200 with `{ "success": true }`.
+
+### 6.3 Exceptional Flows
+- Invalid email or OTP formats -> 400 from handler.
+- Mail delivery failure -> 500 response with reset entry consumed.
+- Repository or mailer misconfiguration -> 500 response.
+- OTP mismatch -> `ErrResetOTPInvalid` -> 400 with generic message.
+
+## 7. Architecture Overview
+```mermaid
+flowchart TD
+    User["User"] --> API["AuthHandler (Echo)"]
+    API --> Service["AuthService"]
+    Service --> UsersRepo["UserRepository"]
+    Service --> ResetRepo["PasswordResetRepository"]
+    Service --> OTP["OTP Generator & Hashing"]
+    Service --> Mailer["PasswordResetMailer (SMTP)"]
+```
+
+### 7.1 Sequence (Request + Confirm)
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant H as AuthHandler
+    participant S as AuthService
+    participant R as PasswordResetRepo
+    participant M as PasswordResetMailer
+    participant UR as UserRepo
+
+    U->>H: POST /password/reset-request (email)
+    H->>S: RequestPasswordReset(email)
+    S->>UR: FindByEmail
+    UR-->>S: User or not found
+    S->>R: ConsumeByUser
+    S->>S: Generate OTP + hash
+    S->>R: Create reset entry
+    S->>M: SendPasswordReset(email, otp)
+    M-->>S: Delivery result
+    S-->>H: nil
+    H-->>U: 200 {success:true}
+
+    U->>H: POST /password/reset-confirm (email, otp, new_password)
+    H->>S: ConfirmPasswordReset(...)
+    S->>UR: FindByEmail
+    S->>R: FindActiveByUser
+    R-->>S: Reset entry
+    S->>S: Verify OTP + derive new password
+    S->>UR: UpdatePassword
+    S->>R: MarkConsumed
+    S->>R: ConsumeByUser
+    S-->>H: nil
+    H-->>U: 200 {success:true}
+```
+
+## 8. Data Model
+| Field | Type | Description |
+| --- | --- | --- |
+| `id` | bigint | Primary key for the reset record. |
+| `user_id` | UUID | References the user requesting the reset. |
+| `otp_hash` | bytea | Hashed OTP value using salt for verification. |
+| `otp_salt` | bytea | Random salt stored alongside the hash. |
+| `expires_at` | timestamptz | Expiration timestamp computed from `PASSWORD_RESET_TTL`. |
+| `consumed` | boolean | Indicates whether the reset token has been used or invalidated. |
+| `created_at` | timestamptz | Creation audit timestamp. |
+| `updated_at` | timestamptz | Updated when tokens are consumed or invalidated. |
+
+All lookups order by `created_at DESC` and return the latest active row.
+
+## 9. API Surface
+- `POST /api/v1/auth/password/reset-request`  
+  Payload: `{ "email": "user@example.com" }`  
+  Success: `{ "success": true }`  
+  Errors: 400 invalid input, 500 infrastructure failure.
+- `POST /api/v1/auth/password/reset-confirm`  
+  Payload: `{ "email": "...", "otp": "123456", "new_password": "..." }`  
+  Success: `{ "success": true }`  
+  Errors: 400 invalid input/OTP/weak password, 500 persistence issues.
+
+## 10. Functional Requirements
+| ID | Requirement Name | Description | Priority |
+| --- | --- | --- | --- |
+| FR-PR-01 | Initiate Reset | System shall accept a reset request when a valid email is submitted. | High |
+| FR-PR-02 | Generate OTP | System shall create a numeric OTP of configurable length for each request. | High |
+| FR-PR-03 | Persist OTP Securely | System shall store OTP values hashed with salt and an expiration timestamp. | High |
+| FR-PR-04 | Deliver OTP | System shall send the OTP to the user's registered email address. | High |
+| FR-PR-05 | Confirm Reset | System shall validate OTP and new password input before updating the user credential. | High |
+| FR-PR-06 | Invalidate Prior Tokens | System shall consume any existing reset tokens once a new one is issued or used. | Medium |
+
+## 11. Non-Functional Requirements
+| ID | Requirement Name | Description |
+| --- | --- | --- |
+| NFR-PR-01 | Security | OTPs must be generated with a cryptographically secure random source and stored only in hashed form. |
+| NFR-PR-02 | Performance | Reset request and confirmation endpoints should respond within 2 seconds under normal load. |
+| NFR-PR-03 | Reliability | Email delivery attempts should be retried or surfaced as failures so users are not left without guidance. |
+| NFR-PR-04 | Auditability | System should log reset issuance and confirmation outcomes with user and timestamp metadata (excluding OTP). |
+| NFR-PR-05 | Privacy | Responses must not reveal whether an email exists to prevent account enumeration. |
+
+## 12. Configuration
+- `PASSWORD_RESET_TTL` (default 15m): expires OTP tokens. Parsed via `time.ParseDuration`.
+- `PASSWORD_RESET_OTP_LENGTH` (default 6): digits generated by `util.GenerateNumericOTP`.
+- SMTP variables (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_USE_TLS`) enable mail delivery.
+- Feature depends on `PasswordResetRepository` and `PasswordResetMailer` injection in `cmd/api/main.go`.
+
+## 13. Security Considerations
+- OTP stored hashed with salt using `util.DerivePassword`; plaintext never persisted.
+- OTPs are single-use; `ConsumeByUser` voids prior tokens on request and after confirmation.
+- Responses conceal whether an email exists to prevent account enumeration.
+- Logger should not capture OTP values; mailer can include masked tokens in logs if necessary.
+- Rate limiting should be applied at the API gateway or middleware layer to prevent brute-force attempts.
+
+## 14. Observability
+- Errors propagate to Echo middleware logging.
+- Mailer can wrap SMTP client with instrumentation for delivery tracking.
+- Future improvement: add structured event logs for issuance, verification, and failures.
+
+## 15. Testing Strategy
+- **Unit tests** in `internal/service/auth_service_test.go` cover request and confirm happy paths, invalid OTP, expired OTP, weak passwords, and mailer failures.
+- **Repository tests** should validate SQL behavior (not included yet).
+- **Integration tests** can use fake SMTP server (MailHog) configured in `infra/compose.local.yml`.
+- **Manual QA** verifies email templates and ensures OTP expiration matches config.
+
+## 16. Future Enhancements
+- Add secondary channels (SMS, push) for OTP delivery.
+- Introduce rate limits and captcha for reset request endpoint.
+- Provide localized email templates.
+- Implement background job to purge consumed/expired reset entries to reduce table size.
+
+---
+
+# Session Timeout - High-Level Design
+
+## 1. Overview
+The session timeout feature enforces automatic logout after a configurable duration. When users authenticate, the system issues a JWT access token and persists a backing session record with an expiration timestamp. Each subsequent request validates both the JWT signature and the session state, ensuring that tokens cannot be reused after the timeout or manual logout. Implementation spans `cmd/api/main.go`, `internal/service/auth_service.go`, `internal/util/jwt.go`, and `internal/repository/postgres/session_repo_pg.go`.
+
+## 2. Goals and Success Criteria
+- Limit exposure of stolen tokens by automatically expiring sessions (`SESSION_TTL` default 24h).
+- Keep JWT expiry and database session expiry aligned so either mechanism invalidates stale sessions.
+- Provide deterministic logout by flipping `is_active` flag while also expiring `expires_at`.
+- Return session expiry to clients (`expires_at` field) so they can refresh proactively.
+- Ensure validation path is performant and resilient.
+
+## 3. Scope
+- Applied to all user-authenticated endpoints under `/api/v1/auth` protected by `requireAuth`.
+- Does not include refresh-token rotation or remember-me functionality (future scope).
+- Session records persist in the `sessions` table; no in-memory cache dependency.
+
+## 4. Actors, Preconditions, Triggers
+- **Actors**: User, AuthHandler (Echo), AuthService, JWTManager, SessionRepository, UserRepository.
+- **Preconditions**: `SESSION_TTL` configured and parseable; JWT secret configured (`JWT_SECRET`); database accessible.
+- **Triggers**: Login or registration success, Google login, or any action that calls `AuthService.Logger`? (should be login). For validations, any API call using Bearer token.
+
+## 5. Use Case Diagram
+```mermaid
+flowchart LR
+    U([User])
+    subgraph "Auth Service"
+        L1[POST /auth/login]
+        VC{Credentials valid?}
+        GI[Generate JWT + expires_at]
+        CS[Create session row <br> is_active=true]
+        LS[[Return token + expires_at]]
+        P1[Protected request]
+        AH{Authorization header?}
+        JT[Parse JWT claims]
+        TE{Token expired?}
+        FS[Find active session]
+        SA{Session active?}
+        FU[Fetch user]
+        OK[[Allow request]]
+        ER[[Respond 401/400]]
+        LO[POST /auth/logout]
+        DS[Deactivate session]
+        SU[[Logout success]]
+    end
+
+    U --> L1 --> VC
+    VC -- no --> ER
+    VC -- yes --> GI --> CS --> LS --> U
+
+    U --> P1 --> AH
+    AH -- no --> ER
+    AH -- yes --> JT --> TE
+    TE -- yes --> ER
+    TE -- no --> FS --> SA
+    SA -- no --> ER
+    SA -- yes --> FU --> OK
+
+    U --> LO --> DS --> SU
+    DS --> FS
+```
+
+## 6. Core Flows
+### 6.1 Session Issuance (Login/Register)
+1. User submits credentials (password or Google token).
+2. `AuthHandler` delegates to the relevant AuthService method (`LoginWithEmail`, `RegisterWithEmail`, `LoginWithGoogle`).
+3. On success, `AuthService.issueSession` calls `JWTManager.Generate`, producing a signed token and `expiresAt = now + SESSION_TTL`.
+4. `SessionRepository.CreateSession` inserts `{user_id, token, expires_at}` with `is_active = true`.
+5. Handler responds with `{ token, expires_at, user }`.
+
+### 6.2 Authenticated Request Validation
+1. Client calls protected endpoint with `Authorization: Bearer <token>`.
+2. `requireAuth` middleware parses header and calls `AuthService.Authenticate`.
+3. JWT signature and expiry validated via `JWTManager.Parse`.
+4. `SessionRepository.FindActiveSession` ensures a matching, active row where `expires_at > NOW()`.
+5. Middleware fetches user via `UserRepository.FindByID` and stashes it in context for handlers.
+6. If any step fails, middleware returns 401.
+
+### 6.3 Logout
+1. Client calls `POST /api/v1/auth/logout`.
+2. Middleware authenticates token; handler calls `AuthService.Logout`.
+3. `SessionRepository.DeactivateSession` sets `is_active = false` and `expires_at = NOW()` for the token.
+4. Future requests with same token fail at validation step.
+
+### 6.4 Automatic Expiration
+- Database session expiry leverages `expires_at > NOW()` checks during `FindActiveSession`.
+- JWT parsing rejects tokens past their embedded expiry.
+- No background job is required; expired rows simply fail validation. Optional cleanup can purge stale records later.
+
+## 7. Architecture Overview
+```mermaid
+flowchart TD
+    User["User"] --> API["AuthHandler (Echo)"]
+    API --> Service["AuthService"]
+    Service --> JWT["JWTManager"]
+    Service --> Sessions["SessionRepository"]
+    Service --> Users["UserRepository"]
+```
+
+### 7.1 Sequence (Authenticated Request)
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant H as AuthHandler
+    participant S as AuthService
+    participant J as JWTManager
+    participant SR as SessionRepo
+    participant UR as UserRepo
+
+    U->>H: HTTP request with Bearer token
+    H->>S: Authenticate(token)
+    S->>J: Parse(token)
+    J-->>S: Claims (valid/expired)
+    S->>SR: FindActiveSession(token)
+    SR-->>S: Session row or not found
+    S->>UR: FindByID(claims.UserID)
+    UR-->>S: User record
+    S-->>H: User
+    H-->>U: proceed to handler or 401
+```
+
+## 8. Data Model
+| Field | Type | Description |
+| --- | --- | --- |
+| `id` | bigint | Primary key for the session row. |
+| `user_id` | UUID | Foreign key referencing the authenticated user. |
+| `token` | text | Persisted JWT string associated with the session. |
+| `created_at` | timestamptz | Timestamp when the session was created. |
+| `expires_at` | timestamptz | Expiration timestamp derived from `SESSION_TTL`. |
+| `is_active` | boolean | Flag indicating whether the session is currently valid. |
+
+Queries ensure `is_active = true` and `expires_at > NOW()` to accept a session.
+
+## 9. Functional Requirements
+| ID | Requirement Name | Description | Priority |
+| --- | --- | --- | --- |
+| FR-ST-01 | Issue Session | System shall generate a JWT and session record upon successful authentication. | High |
+| FR-ST-02 | Validate Token | System shall verify JWT signature and expiry on every protected request. | High |
+| FR-ST-03 | Check Session State | System shall ensure an active session row exists with a future expiry before allowing access. | High |
+| FR-ST-04 | Logout | System shall deactivate the session token when the user logs out. | High |
+| FR-ST-05 | Return Expiry | System shall expose the session expiration time to clients in authentication responses. | Medium |
+
+## 10. Non-Functional Requirements
+| ID | Requirement Name | Description |
+| --- | --- | --- |
+| NFR-ST-01 | Security | Session and JWT secrets must be stored securely; tokens should be invalidated immediately when logout occurs. |
+| NFR-ST-02 | Performance | Token validation and session lookup should complete within 100 ms under normal load to avoid latency spikes. |
+| NFR-ST-03 | Reliability | Session creation and validation must tolerate transient database errors with retries or clear failures. |
+| NFR-ST-04 | Observability | System should log login, logout, and authentication failures with trace IDs for auditing. |
+| NFR-ST-05 | Scalability | Session repository queries must use indexed lookups to support concurrent access as user count grows. |
+
+## 11. Configuration
+- `SESSION_TTL`: parsed in `cmd/api/main.go`; defaults to 24h if invalid. Drives both JWT expiry and database `expires_at`.
+- `JWT_SECRET`: used for HMAC signing and verification.
+- `ALLOW_ORIGINS`: influences CORS but not timeout semantics.
+
+## 12. Security Considerations
+- Tokens are opaque JWTs; storing raw tokens in the database enables targeted revocation but means DB compromise reveals them. Consider hashing tokens if threat model requires.
+- Synchronizing JWT expiry and DB expiry avoids split-brain scenarios where one accepts and other rejects.
+- Middleware rejects missing or malformed Bearer headers.
+- Logout forcibly expires session record and ensures subsequent JWT parsing fails due to `expires_at` change.
+- Rate limiting and anomaly detection (not yet implemented) should watch for repeated 401 responses.
+
+## 13. Observability
+- Echo logger captures authentication failures and error responses.
+- Session creation and deactivation can be instrumented via repository wrappers to emit metrics (counts, expirations).
+- Future enhancement: add audit logging for login and logout events with user ID and IP.
+
+## 14. Testing Strategy
+- `internal/service/auth_service_test.go` covers session creation during login, token generation, logout deactivation, invalid tokens, and user lookup failures.
+- Additional integration tests should verify that expired `expires_at` causes authentication failure and that logout revokes sessions.
+- Load testing should confirm `FindActiveSession` performs under concurrency (consider index on `token` and `is_active`).
+
+## 15. Future Work
+- Introduce refresh tokens and sliding expiration.
+- Hash stored JWT tokens to reduce exposure.
+- Add scheduled cleanup for expired sessions to keep table small.
+- Implement idle timeout (last activity) tracking if required.

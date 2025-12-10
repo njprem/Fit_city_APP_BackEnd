@@ -1,0 +1,270 @@
+{
+    "author": [
+        "Kamin"
+    ],
+    "created_at": "2024-01-01T00:00:00.000Z",
+    "created_by": "Kamin",
+    "description": "Detects repeated failed login attempts from a single IP in 5m.",
+    "enabled": true,
+    "exceptions_list": [],
+    "false_positives": [],
+    "from": "now-5m",
+    "immutable": false,
+    "index": [
+        "app-logs-*"
+    ],
+    "interval": "5m",
+    "language": "kuery",
+    "license": "Elastic License v2",
+    "max_signals": 100,
+    "meta": {},
+    "name": "Auth brute force from single IP",
+    "note": "",
+    "query": "request.uri.keyword:\"/api/v1/auth/login\" and response.status >= 400 and response.status < 500",
+    "references": [],
+    "risk_score": 73,
+    "rule_id": "fitcity-auth-bruteforce-ip",
+    "severity": "high",
+    "tags": [
+        "fitcity",
+        "auth-abuse"
+    ],
+    "throttle": "no_actions",
+    "to": "now",
+    "type": "threshold",
+    "updated_at": "2024-01-01T00:00:00.000Z",
+    "updated_by": "Kamin",
+    "version": 1,
+    "actions": [],
+    "threshold": {
+        "field": [
+            "ip.keyword"
+        ],
+        "value": 5,
+        "cardinality": []
+    }
+}
+{
+    "author": [
+        "Kamin"
+    ],
+    "created_at": "2024-01-01T00:00:00.000Z",
+    "created_by": "Kamin",
+    "description": "Flags a successful login after prior failures from the same user and IP within 10 minutes.",
+    "enabled": true,
+    "exceptions_list": [],
+    "false_positives": [],
+    "from": "now-10m",
+    "immutable": false,
+    "index": [
+        "app-logs-*"
+    ],
+    "interval": "10m",
+    "language": "eql",
+    "license": "Elastic License v2",
+    "max_signals": 100,
+    "meta": {},
+    "name": "Auth success after failures (user+IP)",
+    "note": "",
+    "query": "sequence by user_uuid.keyword, ip.keyword [ authentication where request.uri.keyword == \"/api/v1/auth/login\" and response.status >= 400 and response.status < 500 ] with maxspan=10m [ authentication where request.uri.keyword == \"/api/v1/auth/login\" and response.status == 200 ]",
+    "references": [],
+    "risk_score": 55,
+    "rule_id": "fitcity-auth-success-after-fail",
+    "severity": "medium",
+    "tags": [
+        "fitcity",
+        "auth-abuse",
+        "sequence"
+    ],
+    "throttle": "no_actions",
+    "to": "now",
+    "type": "eql",
+    "updated_at": "2024-01-01T00:00:00.000Z",
+    "updated_by": "Kamin",
+    "version": 1,
+    "actions": []
+}
+{
+    "author": [
+        "Kamin"
+    ],
+    "created_at": "2024-01-01T00:00:00.000Z",
+    "created_by": "Kamin",
+    "description": "Detects password reset spray attempts from a single IP in 10m.",
+    "enabled": true,
+    "exceptions_list": [],
+    "false_positives": [],
+    "from": "now-10m",
+    "immutable": false,
+    "index": [
+        "app-logs-*"
+    ],
+    "interval": "10m",
+    "language": "kuery",
+    "license": "Elastic License v2",
+    "max_signals": 100,
+    "meta": {},
+    "name": "Password reset spray (IP)",
+    "note": "",
+    "query": "request.uri.keyword:\"/api/v1/auth/reset-password\" and response.status >= 400 and response.status < 500",
+    "references": [],
+    "risk_score": 47,
+    "rule_id": "fitcity-reset-spray-ip",
+    "severity": "medium",
+    "tags": [
+        "fitcity",
+        "auth-abuse"
+    ],
+    "throttle": "no_actions",
+    "to": "now",
+    "type": "threshold",
+    "updated_at": "2024-01-01T00:00:00.000Z",
+    "updated_by": "Kamin",
+    "version": 1,
+    "actions": [],
+    "threshold": {
+        "field": [
+            "ip.keyword"
+        ],
+        "value": 10,
+        "cardinality": []
+    }
+}
+{
+    "author": [
+        "Kamin"
+    ],
+    "created_at": "2024-01-01T00:00:00.000Z",
+    "created_by": "Kamin",
+    "description": "Detects high-rate access to sensitive endpoints (auth/admin/export/stats) from a single IP.",
+    "enabled": true,
+    "exceptions_list": [],
+    "false_positives": [],
+    "from": "now-1m",
+    "immutable": false,
+    "index": [
+        "app-logs-*"
+    ],
+    "interval": "1m",
+    "language": "kuery",
+    "license": "Elastic License v2",
+    "max_signals": 100,
+    "meta": {},
+    "name": "Endpoint abuse – high-rate sensitive access (IP)",
+    "note": "",
+    "query": "request.uri.keyword:(\"/api/v1/admin/*\" or \"/api/v1/auth/*\" or \"/api/v1/destinations/*/export\" or \"/api/v1/destination-stats/*\")",
+    "references": [],
+    "risk_score": 73,
+    "rule_id": "fitcity-endpoint-abuse-highrate-ip",
+    "severity": "high",
+    "tags": [
+        "fitcity",
+        "endpoint-abuse"
+    ],
+    "throttle": "no_actions",
+    "to": "now",
+    "type": "threshold",
+    "updated_at": "2024-01-01T00:00:00.000Z",
+    "updated_by": "Kamin",
+    "version": 1,
+    "actions": [],
+    "threshold": {
+        "field": [
+            "ip.keyword"
+        ],
+        "value": 100,
+        "cardinality": []
+    }
+}
+{
+    "author": [
+        "Kamin"
+    ],
+    "created_at": "2024-01-01T00:00:00.000Z",
+    "created_by": "Kamin",
+    "description": "Detects possible admin endpoint probing via repeated 404s from one IP.",
+    "enabled": true,
+    "exceptions_list": [],
+    "false_positives": [],
+    "from": "now-5m",
+    "immutable": false,
+    "index": [
+        "app-logs-*"
+    ],
+    "interval": "5m",
+    "language": "kuery",
+    "license": "Elastic License v2",
+    "max_signals": 100,
+    "meta": {},
+    "name": "Endpoint abuse – admin enumeration 404s (IP)",
+    "note": "",
+    "query": "request.uri.keyword:\"/api/v1/admin/*\" and response.status == 404",
+    "references": [],
+    "risk_score": 55,
+    "rule_id": "fitcity-endpoint-abuse-admin-404",
+    "severity": "medium",
+    "tags": [
+        "fitcity",
+        "endpoint-abuse"
+    ],
+    "throttle": "no_actions",
+    "to": "now",
+    "type": "threshold",
+    "updated_at": "2024-01-01T00:00:00.000Z",
+    "updated_by": "Kamin",
+    "version": 1,
+    "actions": [],
+    "threshold": {
+        "field": [
+            "ip.keyword"
+        ],
+        "value": 15,
+        "cardinality": []
+    }
+}
+{
+    "author": [
+        "Kamin"
+    ],
+    "created_at": "2024-01-01T00:00:00.000Z",
+    "created_by": "Kamin",
+    "description": "Flags bursts of 5xx responses per endpoint, indicating instability or attack.",
+    "enabled": true,
+    "exceptions_list": [],
+    "false_positives": [],
+    "from": "now-1m",
+    "immutable": false,
+    "index": [
+        "app-logs-*"
+    ],
+    "interval": "1m",
+    "language": "kuery",
+    "license": "Elastic License v2",
+    "max_signals": 100,
+    "meta": {},
+    "name": "Endpoint abuse – 5xx burst per route",
+    "note": "",
+    "query": "response.status >= 500 and response.status < 600",
+    "references": [],
+    "risk_score": 82,
+    "rule_id": "fitcity-endpoint-abuse-5xx-burst",
+    "severity": "high",
+    "tags": [
+        "fitcity",
+        "endpoint-abuse"
+    ],
+    "throttle": "no_actions",
+    "to": "now",
+    "type": "threshold",
+    "updated_at": "2024-01-01T00:00:00.000Z",
+    "updated_by": "Kamin",
+    "version": 1,
+    "actions": [],
+    "threshold": {
+        "field": [
+            "request.uri.keyword"
+        ],
+        "value": 20,
+        "cardinality": []
+    }
+}
